@@ -1,0 +1,43 @@
+# Python cache and bytecode
+__pycache__/
+*.py[cod]
+*$py.class
+
+# Virtual environments
+.venv/
+venv/
+env/
+
+# Jupyter and tooling
+.ipynb_checkpoints/
+.pytest_cache/
+.mypy_cache/
+
+# Local helper/debug scripts
+clean_more.py
+fix_indent.py
+remove_emojis.py
+rewrite.py
+soften.py
+ui_update.py
+creditlens/check_emojis.py
+creditlens/clean_decision.py
+creditlens/emoji_purge.py
+creditlens/remove_emojis.py
+creditlens/update_gen.py
+
+# Model and preprocessing artifacts
+creditlens/data/processed/*.pt
+creditlens/data/processed/*.pkl
+creditlens/data/processed/*.npy
+creditlens/data/processed/ensemble.pkl
+creditlens/data/processed/ensemble_metrics.json
+creditlens/data/processed/give_me_some_credit/
+creditlens/data/processed/home_credit/
+
+# Downloaded/raw external datasets
+creditlens/data/raw/kaggle/
+creditlens/data/raw/give_me_some_credit.csv
+creditlens/data/raw/home_credit_application_train.csv
+home-credit-default-risk/
+givemesomecredit/

@@ -22,6 +22,7 @@ class DatasetConfig:
     raw_file: str
     target_column: str
     drop_columns: tuple[str, ...] = ()
+    numeric_only: bool = False
 
 
 DATASET_CONFIGS: dict[str, DatasetConfig] = {
@@ -45,6 +46,7 @@ DATASET_CONFIGS: dict[str, DatasetConfig] = {
         name="home_credit",
         raw_file="home_credit_application_train.csv",
         target_column="TARGET",
+        numeric_only=True,
     ),
 }
 
@@ -84,8 +86,15 @@ class CreditPreprocessor:
             )
 
         features_df = df.drop(columns=[self.target_column]).copy()
-        self.categorical_features = list(features_df.select_dtypes(include=["object", "category", "bool"]).columns)
-        self.numeric_features = [c for c in features_df.columns if c not in self.categorical_features]
+
+        if self.config.numeric_only:
+            features_df = features_df.select_dtypes(include=[np.number]).copy()
+            self.categorical_features = []
+            self.numeric_features = list(features_df.columns)
+        else:
+            self.categorical_features = list(features_df.select_dtypes(include=["object", "category", "bool"]).columns)
+            self.numeric_features = [c for c in features_df.columns if c not in self.categorical_features]
+
         self.feature_columns = list(features_df.columns)
 
         cat_pipeline = Pipeline(

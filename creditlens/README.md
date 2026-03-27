@@ -16,6 +16,10 @@ CreditLens — это практическая система кредитног
 
 `Данные (UCI/Kaggle) → Предобработка (импутация/кодирование/масштабирование) → MLP (CreditNet) → SHAP-анализ → Текстовое объяснение`
 
+Полная модель для прод-скоринга:
+
+`LogReg + GradientBoosting + MLP (CreditNet) → Stacking meta-model (LogReg) → p(default)`
+
 ## Результаты моделей
 Итоговая таблица метрик на тестовой выборке:
 
@@ -41,23 +45,70 @@ pip install -r requirements.txt
 python src/download_data.py --dataset german
 python src/preprocess.py --dataset german
 python src/model.py --dataset german
+python src/ensemble.py --dataset german
 
 # UCI Credit Card
 python src/download_data.py --dataset uci_credit_card
 python src/preprocess.py --dataset uci_credit_card
 python src/model.py --dataset uci_credit_card --epochs 40
+python src/ensemble.py --dataset uci_credit_card
 
 # Kaggle наборы (после ручного скачивания CSV в data/raw/kaggle/...)
 python src/download_data.py --dataset give_me_some_credit
 python src/preprocess.py --dataset give_me_some_credit
 python src/model.py --dataset give_me_some_credit
+python src/ensemble.py --dataset give_me_some_credit
 
 python src/download_data.py --dataset home_credit
 python src/preprocess.py --dataset home_credit
 python src/model.py --dataset home_credit
+python src/ensemble.py --dataset home_credit
 
 streamlit run app.py
+
+# API сервис
+uvicorn api:app --host 0.0.0.0 --port 8000 --reload
 ```
+
+## API: что отправляет клиент
+Перед расчетом получите обязательные поля для датасета:
+
+`GET /schema/{dataset}`
+
+Пример запроса клиента:
+
+```json
+{
+  "dataset": "german",
+  "client_data": {
+    "Status": "A14",
+    "Duration": 24,
+    "History": "A32",
+    "Purpose": "A43",
+    "Amount": 5000,
+    "Savings": "A61",
+    "Employment": "A173",
+    "InstallmentRate": 2,
+    "PersonalStatus": "A93",
+    "Guarantors": "A101",
+    "Residence": 2,
+    "Property": "A123",
+    "Age": 35,
+    "OtherInstallments": "A143",
+    "Housing": "A152",
+    "ExistingCredits": 1,
+    "Job": "A173",
+    "Dependents": 1,
+    "Phone": "A192",
+    "Foreign": "A201"
+  }
+}
+```
+
+Ответ API:
+- `probability_default`: вероятность дефолта
+- `threshold`: порог решения
+- `decision`: `APPROVE` или `REJECT`
 
 ## Структура проекта
 ```text
