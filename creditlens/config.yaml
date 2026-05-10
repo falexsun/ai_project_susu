@@ -1,0 +1,100 @@
+# CreditLens — конфигурация проекта
+# Курсовой проект: "Нейронные сети и искусственный интеллект"
+
+project:
+  name: "CreditLens"
+  version: "1.1.0"
+  description: "Интерпретируемая система кредитного скоринга на основе нейронных сетей"
+
+datasets:
+  default: "german"
+  available:
+    - german
+    - uci_credit_card
+    - give_me_some_credit
+    - home_credit
+  test_size: 0.2
+  random_state: 42
+
+preprocessing:
+  numeric:
+    imputer_strategy: "median"
+    scaler: "StandardScaler"
+  categorical:
+    imputer_strategy: "most_frequent"
+    encoder: "OneHotEncoder"
+    handle_unknown: "ignore"
+
+neural_network:
+  architecture:
+    input_dim: null  # определяется автоматически
+    hidden_layers: [256, 128, 64]
+    activation: "ReLU"
+    batch_norm: true
+    dropout_rates: [0.3, 0.2, 0.2]
+  training:
+    epochs: 100
+    batch_size: 64
+    learning_rate: 0.001
+    weight_decay: 1.0e-4
+    optimizer: "Adam"
+    scheduler:
+      type: "ReduceLROnPlateau"
+      mode: "min"
+      factor: 0.5
+      patience: 5
+      min_lr: 1.0e-5
+    early_stopping:
+      patience: 15
+      monitor: "val_loss"
+    class_balancing:
+      use_pos_weight: true
+      method: "BCEWithLogitsLoss"
+  threshold:
+    default: 0.5
+    optimize_by: "f1"
+    min_precision: 0.5
+    candidates: 81  # линейная сетка от 0.1 до 0.9
+
+ensemble:
+  models:
+    - LogisticRegression
+    - GradientBoosting
+    - MLP
+  meta_model: "LogisticRegression"
+  stacking_method: "stacking"
+
+explainability:
+  framework: "shap"
+  explainer_type: "DeepExplainer"
+  background_samples: 200
+  max_display_waterfall: 15
+  top_features_local: 8
+  top_features_global: 15
+
+visualization:
+  save_plots: true
+  plot_format: "png"
+  dpi: 150
+  plots:
+    - training_curves
+    - roc_curve
+    - pr_curve
+    - confusion_matrix
+    - shap_waterfall
+    - shap_global_importance
+
+paths:
+  data_raw: "data/raw"
+  data_processed: "data/processed"
+  models: "data/processed"
+  plots: "data/plots"
+  reports: "reports"
+
+metrics:
+  primary: "roc_auc"
+  secondary:
+    - pr_auc
+    - f1
+    - precision
+    - recall

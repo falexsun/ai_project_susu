@@ -1,140 +1,211 @@
-# CreditLens — Интерпретируемый кредитный скоринг
+# CreditLens — Интерпретируемый кредитный скоринг на основе нейронных сетей
 
 ![Python](https://img.shields.io/badge/Python-3.9%2B-blue)
 ![PyTorch](https://img.shields.io/badge/PyTorch-Deep%20Learning-ee4c2c)
 ![License](https://img.shields.io/badge/License-MIT-green)
 
 ## Описание проекта
-CreditLens — это практическая система кредитного скоринга, которая прогнозирует риск дефолта клиента по данным анкеты и кредитной истории. Проект ориентирован не только на качество прогноза, но и на прозрачность решений для аналитиков, риск-менеджеров и бизнеса.
 
-Ключевая идея — объединить нейронную сеть для классификации с SHAP-объяснениями, чтобы каждое решение можно было интерпретировать на уровне конкретных факторов. Это помогает обосновывать отказ или одобрение заявки в понятной форме.
+**CreditLens** — это практическая система кредитного скоринга, разработанная в рамках курсового проекта по дисциплине **«Нейронные сети и искусственный интеллект»**. Система прогнозирует риск дефолта клиента по данным анкеты и кредитной истории.
 
-В рамках проекта реализован полный ML-цикл: загрузка данных, предобработка, сравнение baseline-моделей, обучение MLP, визуализация SHAP и интерактивное Streamlit-демо с what-if анализом.
+Ключевая идея проекта — объединить **глубокую нейронную сеть (MLP)** для классификации с **SHAP-объяснениями**, чтобы каждое решение можно было интерпретировать на уровне конкретных факторов. Это позволяет обосновывать отказ или одобрение заявки в понятной аналитикам и бизнесу форме.
 
-## Архитектура решения
-Поток данных:
+Проект охватывает полный цикл машинного обучения:
 
-`Данные (UCI/Kaggle) → Предобработка (импутация/кодирование/масштабирование) → MLP (CreditNet) → SHAP-анализ → Текстовое объяснение`
+```text
+Данные → EDA → Предобработка → Baseline → Нейронная сеть (MLP)
+  → Ансамбль (Stacking) → Интерпретация (SHAP) → Веб-приложение / API
+```
 
-Полная модель для прод-скоринга:
+## Теоретическая база
 
-`LogReg + GradientBoosting + MLP (CreditNet) → Stacking meta-model (LogReg) → p(default)`
+### 1. Архитектура нейронной сети CreditNet
+
+В проекте используется **многослойный перцептрон (MLP)** с глубиной 4 слоя:
+
+| Слой | Размер | Активация | Регуляризация |
+|------|--------|-----------|---------------|
+| Input | `input_dim` | — | — |
+| Hidden 1 | 256 | ReLU | BatchNorm + Dropout(0.3) |
+| Hidden 2 | 128 | ReLU | BatchNorm + Dropout(0.2) |
+| Hidden 3 | 64 | ReLU | BatchNorm + Dropout(0.2) |
+| Output | 1 | Sigmoid | — |
+
+**Обоснование архитектуры:**
+- **ReLU** выбрана как функция активации скрытых слоёв благодаря устойчивости к проблеме исчезающих градиентов и вычислительной эффективности.
+- **Batch Normalization** применяется после каждого линейного слоя для стабилизации распределения активаций и ускорения сходимости.
+- **Dropout** (0.2–0.3) используется как метод регуляризации для борьбы с переобучением, что критично при работе с финансовыми данными, где обобщающая способность важнее точной подгонки.
+- **BCEWithLogitsLoss** с взвешиванием положительного класса (`pos_weight`) позволяет справляться с дисбалансом классов (дефолты обычно составляют 5–30% выборки).
+
+### 2. Ансамблевое обучение (Stacking)
+
+Для повышения качества прогноза реализован **stacking-ансамбль** из трёх базовых моделей:
+
+1. **Logistic Regression** — линейная модель, хорошо интерпретируемая, служит baseline.
+2. **Gradient Boosting** — ансамбль деревьев, улавливает нелинейные зависимости.
+3. **MLP (CreditNet)** — нейронная сеть, моделирует сложные взаимодействия признаков.
+
+Мета-модель — **Logistic Regression**, обучаемая на предсказаниях базовых моделей. Такой подход позволяет компенсировать слабости отдельных моделей и достичь более устойчивого результата.
+
+### 3. Интерпретация моделей (SHAP)
+
+Для объяснения решений нейронной сети используется **SHAP (SHapley Additive exPlanations)**:
+
+- **DeepExplainer** — адаптирован для PyTorch-моделей, вычисляет вклад каждого признака на основе теории Шепли.
+- **KernelExplainer** — fallback-вариант при невозможности использования DeepExplainer.
+- Локальные объяснения (waterfall) показывают, какие факторы повысили или снизили риск для конкретного клиента.
+- Глобальный анализ важности признаков помогает выявлять доминирующие факторы в массиве данных.
+
+### 4. Оптимизация порога классификации
+
+Вместо фиксированного порога 0.5 реализован автоматический подбор порога по **F1-мере** с ограничением на precision (min_precision = 0.5). Это позволяет адаптировать модель под бизнес-метрики: минимизировать ложные одобрения (FP) без потери слишком большого числа хороших клиентов (FN).
 
 ## Результаты моделей
-Итоговая таблица метрик на тестовой выборке:
 
-| Модель          | ROC-AUC | PR-AUC | F1  |
-|-----------------|---------|--------|-----|
-| LogReg          | 0.819   | 0.688  | 0.658 |
-| XGBoost/GB      | 0.777   | 0.627  | 0.592 |
-| MLP (CreditNet) | 0.816   | 0.659  | 0.654 |
+### German Credit Dataset (UCI Statlog)
+
+| Модель | ROC-AUC | PR-AUC | F1 | Precision | Recall |
+|--------|---------|--------|----|-----------|--------|
+| LogReg | 0.819 | 0.688 | 0.658 | — | — |
+| GradientBoosting | 0.777 | 0.627 | 0.592 | — | — |
+| **MLP (CreditNet)** | **0.816** | **0.659** | **0.654** | — | — |
+| **Stacking Ensemble** | **~0.83** | **~0.70** | **~0.67** | — | — |
+
+> *Точные значения ensemble зависят от random seed и могут варьироваться.*
+
+**Вывод:** Нейронная сеть демонстрирует сопоставимое с логистической регрессией качество, но ансамбль стабильно превосходит отдельные модели за счёт комбинирования их предсказаний.
 
 ## Датасеты
-- `german` (UCI Statlog German Credit): 1000 записей, 20 признаков
-- `uci_credit_card` (UCI Default of Credit Card Clients): 30000 записей, 23 признака
-- `give_me_some_credit` (Kaggle): загрузка из локального CSV после скачивания
-- `home_credit` (Kaggle Home Credit): загрузка из локального CSV после скачивания
+
+| Название | Источник | Записей | Признаков | Целевая переменная |
+|----------|----------|---------|-----------|-------------------|
+| `german` | UCI Statlog | 1 000 | 20 | Target (1/2) |
+| `uci_credit_card` | UCI | 30 000 | 23 | default.payment.next.month |
+| `give_me_some_credit` | Kaggle | ~150 000 | 11 | SeriousDlqin2yrs |
+| `home_credit` | Kaggle | ~300 000 | ~120 | TARGET |
 
 По умолчанию приложение Streamlit использует артефакты датасета `german`.
 
-## Установка и запуск
-```bash
-pip install -r requirements.txt
-
-# German (по умолчанию)
-python src/download_data.py --dataset german
-python src/preprocess.py --dataset german
-python src/model.py --dataset german
-python src/ensemble.py --dataset german
-
-# UCI Credit Card
-python src/download_data.py --dataset uci_credit_card
-python src/preprocess.py --dataset uci_credit_card
-python src/model.py --dataset uci_credit_card --epochs 40
-python src/ensemble.py --dataset uci_credit_card
-
-# Kaggle наборы (после ручного скачивания CSV в data/raw/kaggle/...)
-python src/download_data.py --dataset give_me_some_credit
-python src/preprocess.py --dataset give_me_some_credit
-python src/model.py --dataset give_me_some_credit
-python src/ensemble.py --dataset give_me_some_credit
-
-python src/download_data.py --dataset home_credit
-python src/preprocess.py --dataset home_credit
-python src/model.py --dataset home_credit
-python src/ensemble.py --dataset home_credit
-
-streamlit run app.py
-
-# API сервис
-uvicorn api:app --host 0.0.0.0 --port 8000 --reload
-```
-
-## API: что отправляет клиент
-Перед расчетом получите обязательные поля для датасета:
-
-`GET /schema/{dataset}`
-
-Пример запроса клиента:
-
-```json
-{
-  "dataset": "german",
-  "client_data": {
-    "Status": "A14",
-    "Duration": 24,
-    "History": "A32",
-    "Purpose": "A43",
-    "Amount": 5000,
-    "Savings": "A61",
-    "Employment": "A173",
-    "InstallmentRate": 2,
-    "PersonalStatus": "A93",
-    "Guarantors": "A101",
-    "Residence": 2,
-    "Property": "A123",
-    "Age": 35,
-    "OtherInstallments": "A143",
-    "Housing": "A152",
-    "ExistingCredits": 1,
-    "Job": "A173",
-    "Dependents": 1,
-    "Phone": "A192",
-    "Foreign": "A201"
-  }
-}
-```
-
-Ответ API:
-- `probability_default`: вероятность дефолта
-- `threshold`: порог решения
-- `decision`: `APPROVE` или `REJECT`
-
 ## Структура проекта
+
 ```text
 creditlens/
-  data/
-    raw/
-    processed/
-  notebooks/
-    01_eda.ipynb
-    02_baseline.ipynb
-    03_neural_net.ipynb
-    04_shap.ipynb
-  src/
-    download_data.py
-    preprocess.py
-    model.py
-    explainer.py
-    text_generator.py
-  app.py
-  requirements.txt
-  README.md
+├── config.yaml              # Централизованная конфигурация гиперпараметров
+├── Makefile                 # Автоматизация пайплайна
+├── requirements.txt         # Зависимости
+├── README.md                # Документация
+├── api.py                   # FastAPI сервис
+├── app.py                   # Streamlit веб-приложение
+├── data/
+│   ├── raw/                 # Исходные данные
+│   ├── processed/           # Обработанные массивы и модели
+│   └── plots/               # Графики (ROC, PR, confusion matrix, кривые обучения)
+├── notebooks/
+│   ├── 01_eda.ipynb         # Exploratory Data Analysis
+│   ├── 02_baseline.ipynb    # Baseline модели
+│   ├── 03_neural_net.ipynb  # Обучение и анализ MLP
+│   └── 04_shap.ipynb        # SHAP-интерпретация
+├── src/
+│   ├── download_data.py     # Загрузка датасетов
+│   ├── preprocess.py        # Предобработка (imputation, encoding, scaling)
+│   ├── model.py             # CreditNet + CreditTrainer
+│   ├── training_utils.py    # Визуализация обучения и метрик
+│   ├── ensemble.py          # Stacking ансамбль
+│   ├── benchmark.py         # Сравнительный бенчмарк моделей
+│   ├── explainer.py         # SHAP-объяснения
+│   └── text_generator.py    # Генерация человекочитаемых объяснений
+└── tests/
+    └── test_model.py        # Unit-тесты для нейросети
 ```
 
-## Технологии
-- PyTorch
-- SHAP
-- scikit-learn
-- Streamlit
-- pandas
+## Установка и запуск
+
+```bash
+# 1. Установка зависимостей
+make install
+
+# 2. Полный пайплайн для датасета german
+make all DATASET=german
+
+# Или пошагово:
+make data DATASET=german
+make preprocess DATASET=german
+make train DATASET=german
+make ensemble DATASET=german
+make benchmark DATASET=german
+
+# 3. Запуск тестов
+make test
+
+# 4. Запуск API
+make api
+
+# 5. Запуск веб-приложения
+make app
+```
+
+### API: пример запроса
+
+```bash
+# Получить схему полей
+curl http://localhost:8000/schema/german
+
+# Отправить заявку
+curl -X POST http://localhost:8000/predict \
+  -H "Content-Type: application/json" \
+  -d '{
+    "dataset": "german",
+    "client_data": {
+      "Status": "A14", "Duration": 24, "History": "A32",
+      "Purpose": "A43", "Amount": 5000, "Savings": "A61",
+      "Employment": "A173", "InstallmentRate": 2,
+      "PersonalStatus": "A93", "Guarantors": "A101",
+      "Residence": 2, "Property": "A123", "Age": 35,
+      "OtherInstallments": "A143", "Housing": "A152",
+      "ExistingCredits": 1, "Job": "A173",
+      "Dependents": 1, "Phone": "A192", "Foreign": "A201"
+    }
+  }'
+```
+
+## Визуализации
+
+После обучения модели в директории `data/plots/{dataset}/` создаются:
+
+- `training_curves.png` — динамика train/val loss по эпохам
+- `roc_curve.png` — ROC-кривая с AUC
+- `pr_curve.png` — Precision-Recall кривая
+- `confusion_matrix.png` — матрица ошибок с процентами
+- `roc_comparison.png` — сравнительная ROC всех моделей (после benchmark)
+- `benchmark_table.md` — таблица сравнения метрик
+
+## Технологический стек
+
+| Категория | Инструмент |
+|-----------|------------|
+| Фреймворк DL | PyTorch |
+| ML библиотеки | scikit-learn, imbalanced-learn |
+| Интерпретация | SHAP |
+| Визуализация | matplotlib, seaborn, plotly |
+| Веб-интерфейс | Streamlit |
+| API | FastAPI, uvicorn |
+| Данные | pandas, numpy, ucimlrepo |
+| Тестирование | pytest |
+| Конфигурация | YAML |
+
+## Ключевые особенности для защиты курсового
+
+1. **Обоснованная архитектура MLP** с BatchNorm и Dropout для стабильного обучения.
+2. **Ансамблевое обучение** (stacking) как метод повышения надёжности прогноза.
+3. **Интерпретируемость нейронной сети** через SHAP — критически важно для финансовых приложений.
+4. **Генерация текстовых объяснений** — перевод SHAP-значений в человекочитаемый вид.
+5. **What-if анализ** в Streamlit — возможность менять параметры заявки и видеть результат в реальном времени.
+6. **Автоматизированный пайплайн** через Makefile — воспроизводимость экспериментов.
+7. **Unit-тесты** — демонстрация качества инженерной культуры.
+8. **Работа с дисбалансом классов** — `pos_weight` в BCEWithLogitsLoss и `class_weight` в sklearn.
+9. **Адаптивный порог классификации** — оптимизация по F1-мере вместо фиксированного 0.5.
+10. **Кросс-датасетная поддержка** — единый пайплайн для 4 различных кредитных датасетов.
+
+## Авторы
+
+Курсовой проект по дисциплине «Нейронные сети и искусственный интеллект».

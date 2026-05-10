@@ -1,15 +1,32 @@
 from __future__ import annotations
 
 import argparse
+import sys
 import time
 from pathlib import Path
+
+sys.path.insert(0, str(Path(__file__).resolve().parent))
 
 import numpy as np
 import torch
 import torch.nn as nn
-from sklearn.metrics import average_precision_score, f1_score, precision_score, recall_score, roc_auc_score
+from sklearn.metrics import (
+    average_precision_score,
+    f1_score,
+    precision_score,
+    recall_score,
+    roc_auc_score,
+)
 from sklearn.model_selection import train_test_split
 from torch.utils.data import DataLoader, TensorDataset
+
+from training_utils import (
+    plot_confusion_matrix,
+    plot_pr_curve,
+    plot_roc_curve,
+    plot_training_curves,
+    save_metrics_report,
+)
 
 
 def get_processed_dir(project_root: Path, dataset: str) -> Path:
@@ -235,24 +252,72 @@ def main() -> None:
     args = parse_args()
     project_root = Path(__file__).resolve().parents[1]
     processed_dir = get_processed_dir(project_root, args.dataset)
+    plots_dir = project_root / "data" / "plots" / args.dataset
+    plots_dir.mkdir(parents=True, exist_ok=True)
 
     X_train = np.load(processed_dir / "X_train.npy")
     X_test = np.load(processed_dir / "X_test.npy")
     y_train = np.load(processed_dir / "y_train.npy")
     y_test = np.load(processed_dir / "y_test.npy")
 
+    print(f"[info] Датасет: {args.dataset} | X_train: {X_train.shape} | X_test: {X_test.shape}")
+
     trainer = CreditTrainer(input_dim=X_train.shape[1])
 
     started = time.perf_counter()
-    trainer.train(X_train, y_train, epochs=args.epochs, lr=args.lr)
+    history = trainer.train(X_train, y_train, epochs=args.epochs, lr=args.lr)
     duration = time.perf_counter() - started
 
     test_prob = trainer.predict_proba(X_test)
     metrics = evaluate_binary_metrics(y_test, test_prob, threshold=trainer.threshold)
 
+    # Сохранение модели
     model_path = processed_dir / "model.pt"
     trainer.save(model_path)
 
+    # Визуализация кривых обучения
+    plot_training_curves(
+        history,
+        save_path=plots_dir / "training_curves.png",
+        title=f"Кривые обучения — {args.dataset}",
+    )
+
+    # ROC и PR кривые
+    plot_roc_curve(
+        y_test, test_prob,
+        save_path=plots_dir / "roc_curve.png",
+        model_name="CreditNet (MLP)",
+    )
+    plot_pr_curve(
+        y_test, test_prob,
+        save_path=plots_dir / "pr_curve.png",
+        model_name="CreditNet (MLP)",
+    )
+
+    # Confusion matrix
+    y_pred = (test_prob >= trainer.threshold).astype(int)
+    plot_confusion_matrix(
+        y_test, y_pred,
+        save_path=plots_dir / "confusion_matrix.png",
+        labels=["Одобрено (0)", "Дефолт (1)"],
+    )
+
+    # Сохранение метрик в JSON
+    save_metrics_report(
+        metrics,
+        save_path=plots_dir / "metrics.json",
+        extra={
+            "dataset": args.dataset,
+            "model": "CreditNet",
+            "epochs": len(history["train_loss"]),
+            "lr": args.lr,
+            "threshold": trainer.threshold,
+            "recommended_threshold": trainer.recommended_threshold,
+            "training_time_sec": round(duration, 2),
+        },
+    )
+
+    print(f"\n{'='*50}")
     print(f"Датасет: {args.dataset}")
     print(f"Модель сохранена: {model_path}")
     print(f"Время обучения: {duration:.2f} сек")
@@ -261,6 +326,8 @@ def main() -> None:
         print(f"  {k}: {v:.4f}")
     print(f"  threshold: {trainer.threshold:.3f}")
     print(f"  recommended_threshold: {trainer.recommended_threshold:.3f}")
+    print(f"Графики сохранены в: {plots_dir}")
+    print(f"{'='*50}")
 
 
 if __name__ == "__main__":
