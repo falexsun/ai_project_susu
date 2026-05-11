@@ -58,6 +58,14 @@ def get_processed_dir(project_root: Path, dataset: str) -> Path:
 
 
 class CreditPreprocessor:
+    """Предобработчик для кредитных датасетов.
+
+    Примечание по German Credit: в оригинальном категориальном датасете
+    InstallmentRate был закодирован как A81-A84. В используемом CSV файле
+    он уже преобразован в числовой 1-4, поэтому обрабатывается как
+    числовой признак (StandardScaler), а не категориальный.
+    """
+
     def __init__(self, dataset: str = "german") -> None:
         if dataset not in DATASET_CONFIGS:
             raise ValueError(

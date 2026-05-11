@@ -20,10 +20,23 @@ from src.text_generator import (
     generate_explanation,
     generate_human_brief,
     humanize_feature_name,
+    _normalize_feature_name,
     generate_segment_risk,
     generate_auto_recommendations,
     generate_smart_recommendations,
 )
+
+# ---------------------------------------------------------------------------
+# Model registry for UI comparison
+# ---------------------------------------------------------------------------
+MODEL_REGISTRY: dict[str, str] = {
+    "CreditNet (MLP)": "mlp_original",
+    "CreditNet + Focal Loss": "mlp_focal",
+    "Logistic Regression (C=0.1)": "logreg_c01",
+    "Random Forest (depth=4)": "rf_depth4",
+    "Gradient Boosting (depth=2)": "gb_depth2",
+    "Stacking (MLP+RF+LogReg)": "stacking",
+}
 
 # ---------------------------------------------------------------------------
 # monkey-patch so joblib can find the classes
@@ -65,16 +78,65 @@ if "show_results" not in st.session_state:
 
 
 @st.cache_resource
-def load_artifacts() -> tuple[CreditTrainer, object, list[str], np.ndarray, np.ndarray]:
+def load_artifacts() -> tuple[dict[str, Any], object, list[str], np.ndarray, np.ndarray]:
     root = Path(__file__).resolve().parent
     processed = root / "data" / "processed"
 
-    trainer = CreditTrainer.load(processed / "model.pt", device="cpu")
     preprocessor = joblib.load(processed / "preprocessor.pkl")
     feature_names = json.loads((processed / "feature_names.json").read_text(encoding="utf-8"))
     X_train = np.load(processed / "X_train.npy")
     X_test = np.load(processed / "X_test.npy")
-    return trainer, preprocessor, feature_names, X_train, X_test
+
+    # Load all models
+    models_dir = processed / "models"
+    models: dict[str, Any] = {}
+    if models_dir.exists():
+        for label, key in MODEL_REGISTRY.items():
+            pkl_path = models_dir / f"{key}.pkl"
+            if pkl_path.exists():
+                artifact = joblib.load(pkl_path)
+                models[label] = artifact
+                print(f"[load_artifacts] Loaded {label} from {pkl_path}")
+
+    # Fallback: always load original MLP
+    if "CreditNet (MLP)" not in models:
+        mlp_path = processed / "model.pt"
+        if mlp_path.exists():
+            models["CreditNet (MLP)"] = {"model": CreditTrainer.load(mlp_path, device="cpu"), "type": "mlp"}
+
+    return models, preprocessor, feature_names, X_train, X_test
+
+
+def predict_with_model(model_artifact: dict[str, Any], X: np.ndarray, all_models: dict[str, Any] | None = None) -> np.ndarray:
+    """Универсальная функция предсказания для любой модели."""
+    model_type = model_artifact.get("type", "mlp")
+    model = model_artifact["model"]
+
+    if model_type == "mlp":
+        return model.predict_proba(X)
+
+    if model_type == "sklearn":
+        base_labels = model_artifact.get("base_model_labels")
+        if base_labels and all_models is not None:
+            # Stacking: collect base predictions
+            base_probs = []
+            for label in base_labels:
+                if label in all_models:
+                    bp = all_models[label]["model"].predict_proba(X)
+                    # Normalize: always take class-1 probability as 1D array
+                    if bp.ndim == 2 and bp.shape[1] == 2:
+                        bp = bp[:, 1]
+                    base_probs.append(bp)
+                else:
+                    print(f"[predict_with_model] Warning: base model '{label}' not found")
+            if len(base_probs) >= 2:
+                stacked = np.column_stack(base_probs)
+                return model.predict_proba(stacked)[:, 1]
+            # Fallback to direct prediction if stacking fails
+            return model.predict_proba(X)[:, 1]
+        return model.predict_proba(X)[:, 1]
+
+    raise ValueError(f"Unknown model type: {model_type}")
 
 
 def build_input_df(
@@ -125,7 +187,7 @@ def build_input_df(
     return pd.DataFrame([defaults])
 
 
-trainer, preprocessor, feature_names, X_train, X_test = load_artifacts()
+all_models, preprocessor, feature_names, X_train, X_test = load_artifacts()
 
 # ---------------------------------------------------------------------------
 # Mappings — ручной перевод категорий датасета в человекочитаемые labels
@@ -235,6 +297,21 @@ foreign_map = {
 with st.sidebar:
     st.header("Профиль клиента")
 
+    # --- Model selector ---
+    available_models = list(all_models.keys())
+    selected_model_name = st.selectbox(
+        "Модель для оценки",
+        available_models,
+        index=available_models.index("CreditNet (MLP)") if "CreditNet (MLP)" in available_models else 0,
+        help="Выберите модель, которой будет считаться вероятность дефолта",
+    )
+    selected_artifact = all_models[selected_model_name]
+    # For explainer we always use the original MLP model (SHAP needs nn.Module)
+    explainer_model = all_models.get("CreditNet (MLP)", selected_artifact)["model"]
+    if hasattr(explainer_model, "model"):
+        explainer_model = explainer_model.model
+
+    st.markdown("<hr style='margin:12px 0; border-color:#e2e8f0;'/>", unsafe_allow_html=True)
     st.markdown("<p class='cl-muted' style='margin-bottom:12px;'>Основные параметры</p>", unsafe_allow_html=True)
     age = st.number_input("Возраст", min_value=18, max_value=75, value=35)
     amount_rub = st.number_input("Сумма кредита, ₽", min_value=25000, max_value=1000000, value=250000, step=5000)
@@ -298,8 +375,8 @@ if st.session_state.show_results:
     )
 
     X_user = preprocessor.transform(row)
-    pred = float(trainer.predict_proba(X_user)[0])
-    threshold = float(getattr(trainer, "threshold", 0.5))
+    pred = float(predict_with_model(selected_artifact, X_user, all_models)[0])
+    threshold = 0.5
 
     approved = pred < threshold
     decision = "Одобрено" if approved else "Отказ"
@@ -349,7 +426,7 @@ if st.session_state.show_results:
     # -----------------------------------------------------------------------
     # Interpretation + recommendations
     # -----------------------------------------------------------------------
-    explainer = CreditExplainer(trainer.model, X_train, feature_names)
+    explainer = CreditExplainer(explainer_model, X_train, feature_names)
     shap_info = explainer.explain(X_user)
 
     st.markdown("<div class='cl-section'>Обоснование решения</div>", unsafe_allow_html=True)
@@ -368,7 +445,7 @@ if st.session_state.show_results:
             st.write(f"– {reason}")
 
     auto_recs = generate_smart_recommendations(
-        trainer=trainer,
+        trainer=selected_artifact["model"],
         preprocessor=preprocessor,
         row=row,
         shap_dict=shap_info,
@@ -418,7 +495,7 @@ if st.session_state.show_results:
         foreign=foreign_map[foreign_rus],
     )
     X_whatif = preprocessor.transform(row_whatif)
-    pred_whatif = float(trainer.predict_proba(X_whatif)[0])
+    pred_whatif = float(predict_with_model(selected_artifact, X_whatif, all_models)[0])
     delta = pred_whatif - pred
 
     delta_color = "#16a34a" if delta < 0 else "#dc2626" if delta > 0 else "#64748b"
@@ -432,7 +509,11 @@ if st.session_state.show_results:
     # SHAP factors (collapsible, for operators)
     # -----------------------------------------------------------------------
     with st.expander("Детальный разбор факторов", expanded=False):
-        friendly_feature_names = [humanize_feature_name(name) for name in shap_info["feature_names"]]
+        sample_vals = np.asarray(shap_info.get("sample", []))
+        friendly_feature_names = [
+            _normalize_feature_name(name, sample_vals[i] if len(sample_vals) > i else None)
+            for i, name in enumerate(shap_info["feature_names"])
+        ]
         top_idx = np.argsort(np.abs(shap_info["shap_values"]))[-8:][::-1]
         factors_df = pd.DataFrame(
             {

@@ -38,11 +38,11 @@ CODEBOOK = {
         "A14": "расчетного счета нет",
     },
     "History": {
-        "A30": "ранее кредиты брались и погашались вовремя",
+        "A30": "кредитов не брались / все погашены вовремя",
         "A31": "все кредиты в этом банке закрыты вовремя",
-        "A32": "текущие кредиты пока погашаются без просрочек",
+        "A32": "текущие кредиты погашаются вовремя до сих пор",
         "A33": "были задержки платежей в прошлом",
-        "A34": "критичная кредитная история или есть другие проблемные кредиты",
+        "A34": "критичная история / кредиты в других банках",
     },
     "Purpose": {
         "A40": "автомобиль (новый)",
@@ -85,7 +85,7 @@ CODEBOOK = {
     },
     "Property": {
         "A121": "есть недвижимость",
-        "A122": "есть накопления или страхование жизни",
+        "A122": "договор накопительного строительства / страхование жизни",
         "A123": "есть автомобиль или другое имущество",
         "A124": "имущество не подтверждено или отсутствует",
     },
@@ -136,8 +136,14 @@ def humanize_feature_name(feature_name: str) -> str:
     return FEATURE_TEMPLATES.get(field, raw)
 
 
-def _normalize_feature_name(feature_name: str) -> str:
-    return humanize_feature_name(feature_name)
+def _normalize_feature_name(feature_name: str, feature_value: float | None = None) -> str:
+    label = humanize_feature_name(feature_name)
+    # Для one-hot категориальных признаков с value=0 добавляем "отсутствие"
+    if feature_value is not None and feature_value == 0:
+        raw = feature_name.split("__")[-1]
+        if "_A" in raw:
+            return f"отсутствует: {label}"
+    return label
 
 
 def generate_explanation(shap_dict: dict[str, Any]) -> str:
@@ -149,6 +155,7 @@ def generate_explanation(shap_dict: dict[str, Any]) -> str:
     shap_values = np.asarray(shap_dict["shap_values"])
     feature_names = list(shap_dict["feature_names"])
     prediction = float(shap_dict["prediction"])
+    sample = np.asarray(shap_dict.get("sample", []))
 
     decision = "высокий риск (вероятен отказ)" if prediction >= 0.5 else "умеренный риск (вероятно одобрение)"
 
@@ -158,12 +165,18 @@ def generate_explanation(shap_dict: dict[str, Any]) -> str:
     risk_factors: list[str] = []
     for i in pos_idx:
         if shap_values[i] > 0:
-            risk_factors.append(_normalize_feature_name(feature_names[i]))
+            val = sample[i] if len(sample) > i else None
+            # Для one-hot категорий со значением 0 не показываем как "рисковый фактор"
+            # (это сбивает с толку — "отсутствие чего-то увеличивает риск")
+            if val == 0 and "_A" in feature_names[i].split("__")[-1]:
+                continue
+            risk_factors.append(_normalize_feature_name(feature_names[i], val))
 
     protective_factors: list[str] = []
     for i in neg_idx:
         if shap_values[i] < 0:
-            protective_factors.append(_normalize_feature_name(feature_names[i]))
+            val = sample[i] if len(sample) > i else None
+            protective_factors.append(_normalize_feature_name(feature_names[i], val))
 
     parts = [f"Итог оценки: {decision}. Вероятность проблем с выплатой — {prediction * 100:.1f}%."]
     
@@ -207,6 +220,7 @@ def generate_human_brief(shap_dict: dict[str, Any]) -> dict[str, Any]:
     shap_values = np.asarray(shap_dict["shap_values"])
     feature_names = list(shap_dict["feature_names"])
     prediction = float(shap_dict["prediction"])
+    sample = np.asarray(shap_dict.get("sample", []))
 
     ordered = np.argsort(np.abs(shap_values))[::-1]
     top_idx = ordered[:3]
@@ -216,7 +230,8 @@ def generate_human_brief(shap_dict: dict[str, Any]) -> dict[str, Any]:
     for i in top_idx:
         feature = feature_names[i]
         direction = "повышает" if shap_values[i] > 0 else "снижает"
-        label = humanize_feature_name(feature)
+        val = sample[i] if len(sample) > i else None
+        label = _normalize_feature_name(feature, val)
         reasons.append(f"{label} {direction} риск")
 
         key = _base_feature_key(feature)
@@ -312,9 +327,19 @@ def generate_smart_recommendations(
     """
     recommendations: list[str] = []
 
+    # Универсальный predict_fn — работает и с MLP, и с sklearn
+    def _predict_fn(X: np.ndarray) -> np.ndarray:
+        if hasattr(trainer, "predict_proba"):
+            probs = trainer.predict_proba(X)
+            # Sklearn возвращает (n_samples, 2), MLP — (n_samples,)
+            if probs.ndim == 2 and probs.shape[1] == 2:
+                return probs[:, 1]
+            return probs
+        raise AttributeError("trainer must have predict_proba method")
+
     # Базовая вероятность
     X_base = preprocessor.transform(row)
-    prob_base = float(trainer.predict_proba(X_base)[0])
+    prob_base = float(_predict_fn(X_base)[0])
 
     # --- What-if для суммы кредита ---
     amount_candidates = []
@@ -332,7 +357,7 @@ def generate_smart_recommendations(
         row_mod["Amount"] = int(cand_amount / 50)  # конвертация в DM для german
         try:
             X_mod = preprocessor.transform(row_mod)
-            prob = float(trainer.predict_proba(X_mod)[0])
+            prob = float(_predict_fn(X_mod)[0])
             if prob < best_amount_prob:
                 best_amount_prob = prob
                 best_amount = cand_amount
@@ -362,7 +387,7 @@ def generate_smart_recommendations(
         row_mod["Duration"] = cand_duration
         try:
             X_mod = preprocessor.transform(row_mod)
-            prob = float(trainer.predict_proba(X_mod)[0])
+            prob = float(_predict_fn(X_mod)[0])
             if prob < best_duration_prob:
                 best_duration_prob = prob
                 best_duration = cand_duration
