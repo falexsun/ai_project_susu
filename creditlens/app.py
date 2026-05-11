@@ -22,6 +22,7 @@ from src.text_generator import (
     humanize_feature_name,
     generate_segment_risk,
     generate_auto_recommendations,
+    generate_smart_recommendations,
 )
 
 # ---------------------------------------------------------------------------
@@ -235,8 +236,8 @@ with st.sidebar:
     st.header("Профиль клиента")
 
     st.markdown("<p class='cl-muted' style='margin-bottom:12px;'>Основные параметры</p>", unsafe_allow_html=True)
-    age = st.slider("Возраст", 18, 75, 35)
-    amount_rub = st.slider("Сумма кредита, ₽", 25000, 1000000, 250000, step=5000)
+    age = st.number_input("Возраст", min_value=18, max_value=75, value=35)
+    amount_rub = st.number_input("Сумма кредита, ₽", min_value=25000, max_value=1000000, value=250000, step=5000)
     duration = st.slider("Срок, месяцев", 6, 72, 24)
 
     status_rus = st.selectbox("Статус расчетного счета", list(status_map.keys()))
@@ -366,7 +367,14 @@ if st.session_state.show_results:
         for reason in brief["reasons"]:
             st.write(f"– {reason}")
 
-    auto_recs = generate_auto_recommendations(shap_info, amount_rub, duration)
+    auto_recs = generate_smart_recommendations(
+        trainer=trainer,
+        preprocessor=preprocessor,
+        row=row,
+        shap_dict=shap_info,
+        amount=amount_rub,
+        duration=duration,
+    )
     if auto_recs:
         st.markdown("<div class='cl-section'>Рекомендации</div>", unsafe_allow_html=True)
         for rec in auto_recs:

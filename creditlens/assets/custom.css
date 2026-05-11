@@ -14,20 +14,22 @@ html, body, [class*="css"] {
 .cl-header {
     padding: 28px 32px;
     border-radius: 10px;
-    background: #0f172a;
+    background: var(--secondary-background-color);
     margin-bottom: 24px;
-    border: 1px solid #1e293b;
+    border: 1px solid var(--border-color);
+    border-left: 3px solid #2563eb;
 }
 .cl-header h1 {
     margin: 0 0 6px 0;
-    color: #f8fafc;
+    color: var(--text-color);
     font-weight: 700;
     font-size: 1.6rem !important;
     letter-spacing: -0.02em;
 }
 .cl-header p {
     margin: 0;
-    color: #94a3b8;
+    color: var(--text-color);
+    opacity: 0.65;
     font-size: 0.9rem;
     line-height: 1.5;
     max-width: 600px;
@@ -37,8 +39,8 @@ html, body, [class*="css"] {
 .cl-metric {
     padding: 20px 22px;
     border-radius: 8px;
-    background: #ffffff;
-    border: 1px solid #e2e8f0;
+    background: var(--secondary-background-color);
+    border: 1px solid var(--border-color);
     text-align: left;
 }
 .cl-metric-label {
@@ -46,25 +48,26 @@ html, body, [class*="css"] {
     font-weight: 600;
     text-transform: uppercase;
     letter-spacing: 0.08em;
-    color: #64748b;
+    color: var(--text-color);
+    opacity: 0.55;
     margin-bottom: 6px;
 }
 .cl-metric-value {
     font-size: 1.75rem;
     font-weight: 700;
     line-height: 1.2;
-    color: #0f172a;
+    color: var(--text-color);
 }
 
 /* ---- Recommendation panels ---- */
 .cl-rec {
     padding: 12px 16px;
     border-radius: 6px;
-    background: #f8fafc;
+    background: var(--secondary-background-color);
     border-left: 3px solid #2563eb;
     margin: 6px 0;
     font-size: 0.88rem;
-    color: #1e293b;
+    color: var(--text-color);
     line-height: 1.5;
 }
 
@@ -72,23 +75,25 @@ html, body, [class*="css"] {
 .cl-section {
     font-size: 0.95rem;
     font-weight: 600;
-    color: #0f172a;
+    color: var(--text-color);
     margin: 28px 0 14px 0;
     padding-bottom: 6px;
-    border-bottom: 1px solid #e2e8f0;
+    border-bottom: 1px solid var(--border-color);
     text-transform: uppercase;
     letter-spacing: 0.04em;
 }
 
 /* ---- Utility text ---- */
 .cl-muted {
-    color: #64748b;
+    color: var(--text-color);
+    opacity: 0.6;
     font-size: 0.85rem;
     line-height: 1.5;
 }
 .cl-small {
     font-size: 0.75rem;
-    color: #94a3b8;
+    color: var(--text-color);
+    opacity: 0.45;
 }
 
 /* ---- Streamlit overrides (keep minimal) ---- */

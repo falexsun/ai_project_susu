@@ -3,6 +3,7 @@ from __future__ import annotations
 from typing import Any
 
 import numpy as np
+import pandas as pd
 
 
 FEATURE_TEMPLATES = {
@@ -293,4 +294,105 @@ def generate_auto_recommendations(shap_dict: dict[str, Any], amount: int, durati
     if not recommendations:
         recommendations.append("Особых рекомендаций нет, текущие параметры заявки выглядят оптимально.")
         
+    return recommendations
+
+
+def generate_smart_recommendations(
+    trainer: Any,
+    preprocessor: Any,
+    row: pd.DataFrame,
+    shap_dict: dict[str, Any],
+    amount: int,
+    duration: int,
+) -> list[str]:
+    """Генерирует рекомендации на основе what-if симуляций.
+
+    В отличие от generate_auto_recommendations, эта функция реально прогоняет
+    изменённые варианты через модель и советует только те, что снижают риск.
+    """
+    recommendations: list[str] = []
+
+    # Базовая вероятность
+    X_base = preprocessor.transform(row)
+    prob_base = float(trainer.predict_proba(X_base)[0])
+
+    # --- What-if для суммы кредита ---
+    amount_candidates = []
+    for pct in [-0.30, -0.20, -0.10, 0.10, 0.20]:
+        candidate = int(amount * (1 + pct))
+        candidate = max(25000, min(1_000_000, candidate))
+        if candidate == amount:
+            continue
+        amount_candidates.append((candidate, pct))
+
+    best_amount = None
+    best_amount_prob = prob_base
+    for cand_amount, _ in amount_candidates:
+        row_mod = row.copy()
+        row_mod["Amount"] = int(cand_amount / 50)  # конвертация в DM для german
+        try:
+            X_mod = preprocessor.transform(row_mod)
+            prob = float(trainer.predict_proba(X_mod)[0])
+            if prob < best_amount_prob:
+                best_amount_prob = prob
+                best_amount = cand_amount
+        except Exception:
+            continue
+
+    if best_amount is not None and best_amount_prob < prob_base - 0.001:
+        delta = (prob_base - best_amount_prob) * 100
+        recommendations.append(
+            f"Уменьшите сумму кредита до {best_amount:,} ₽ — это снизит вероятность дефолта "
+            f"примерно на {delta:.1f} п.п. (с {prob_base*100:.1f}% до {best_amount_prob*100:.1f}%)."
+        )
+
+    # --- What-if для срока кредита ---
+    duration_candidates = []
+    for delta_m in [-12, -6, 6, 12]:
+        candidate = duration + delta_m
+        candidate = max(6, min(72, candidate))
+        if candidate == duration:
+            continue
+        duration_candidates.append((candidate, delta_m))
+
+    best_duration = None
+    best_duration_prob = prob_base
+    for cand_duration, _ in duration_candidates:
+        row_mod = row.copy()
+        row_mod["Duration"] = cand_duration
+        try:
+            X_mod = preprocessor.transform(row_mod)
+            prob = float(trainer.predict_proba(X_mod)[0])
+            if prob < best_duration_prob:
+                best_duration_prob = prob
+                best_duration = cand_duration
+        except Exception:
+            continue
+
+    if best_duration is not None and best_duration_prob < prob_base - 0.001:
+        delta = (prob_base - best_duration_prob) * 100
+        action = "сократите" if best_duration < duration else "увеличьте"
+        recommendations.append(
+            f"{action.capitalize()} срок кредита до {best_duration} мес. — это снизит вероятность дефолта "
+            f"примерно на {delta:.1f} п.п. (с {prob_base*100:.1f}% до {best_duration_prob*100:.1f}%)."
+        )
+
+    # --- Общие советы по другим факторам риска ---
+    shap_values = np.asarray(shap_dict["shap_values"])
+    feature_names = list(shap_dict["feature_names"])
+    ordered = np.argsort(np.abs(shap_values))[::-1]
+
+    for i in ordered:
+        if shap_values[i] > 0 and len(recommendations) < 4:
+            feat_key = _base_feature_key(feature_names[i])
+            rec = RECOMMENDATIONS.get(feat_key)
+            if rec and rec not in "\n".join(recommendations):
+                # Не дублируем уже использованные Amount/Duration советы
+                if feat_key in ("Amount", "Duration"):
+                    continue
+                recommendations.append(rec)
+
+    if not recommendations:
+        recommendations.append("Текущие параметры заявки оптимальны. Особых рекомендаций нет.")
+
     return recommendations
