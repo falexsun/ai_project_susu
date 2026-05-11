@@ -36,32 +36,59 @@ def get_processed_dir(project_root: Path, dataset: str) -> Path:
 
 
 class CreditNet(nn.Module):
-    def __init__(self, input_dim: int) -> None:
+    def __init__(
+        self,
+        input_dim: int,
+        hidden_layers: list[int] | None = None,
+        dropout_rates: list[float] | None = None,
+        use_batch_norm: bool = True,
+    ) -> None:
         super().__init__()
-        self.layers = nn.Sequential(
-            nn.Linear(input_dim, 256),
-            nn.BatchNorm1d(256),
-            nn.ReLU(),
-            nn.Dropout(0.3),
-            nn.Linear(256, 128),
-            nn.BatchNorm1d(128),
-            nn.ReLU(),
-            nn.Dropout(0.2),
-            nn.Linear(128, 64),
-            nn.BatchNorm1d(64),
-            nn.ReLU(),
-            nn.Dropout(0.2),
-            nn.Linear(64, 1),
-        )
+        hidden_layers = hidden_layers or [256, 128, 64]
+        dropout_rates = dropout_rates or [0.3, 0.2, 0.2]
+
+        if len(dropout_rates) != len(hidden_layers):
+            raise ValueError("dropout_rates и hidden_layers должны иметь одинаковую длину")
+
+        layers: list[nn.Module] = []
+        prev_dim = input_dim
+        for hidden_dim, dropout_p in zip(hidden_layers, dropout_rates):
+            layers.append(nn.Linear(prev_dim, hidden_dim))
+            if use_batch_norm:
+                layers.append(nn.BatchNorm1d(hidden_dim))
+            layers.append(nn.ReLU())
+            layers.append(nn.Dropout(dropout_p))
+            prev_dim = hidden_dim
+        layers.append(nn.Linear(prev_dim, 1))
+
+        self.layers = nn.Sequential(*layers)
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
         return self.layers(x)
 
 
 class CreditTrainer:
-    def __init__(self, input_dim: int, device: str | None = None) -> None:
+    def __init__(
+        self,
+        input_dim: int,
+        device: str | None = None,
+        hidden_layers: list[int] | None = None,
+        dropout_rates: list[float] | None = None,
+        use_batch_norm: bool = True,
+    ) -> None:
         self.device = device or ("cuda" if torch.cuda.is_available() else "cpu")
-        self.model = CreditNet(input_dim).to(self.device)
+        self.arch_config = {
+            "input_dim": input_dim,
+            "hidden_layers": hidden_layers or [256, 128, 64],
+            "dropout_rates": dropout_rates or [0.3, 0.2, 0.2],
+            "use_batch_norm": use_batch_norm,
+        }
+        self.model = CreditNet(
+            input_dim=input_dim,
+            hidden_layers=self.arch_config["hidden_layers"],
+            dropout_rates=self.arch_config["dropout_rates"],
+            use_batch_norm=self.arch_config["use_batch_norm"],
+        ).to(self.device)
         self.history: dict[str, list[float]] = {"train_loss": [], "val_loss": []}
         self.threshold = 0.5
         self.recommended_threshold = 0.5
@@ -204,7 +231,8 @@ class CreditTrainer:
     def save(self, path: str | Path) -> None:
         checkpoint = {
             "state_dict": self.model.state_dict(),
-            "input_dim": self.model.layers[0].in_features,
+            "input_dim": self.arch_config["input_dim"],
+            "arch_config": self.arch_config,
             "history": self.history,
             "threshold": self.threshold,
             "recommended_threshold": self.recommended_threshold,
@@ -214,7 +242,14 @@ class CreditTrainer:
     @classmethod
     def load(cls, path: str | Path, device: str | None = None) -> "CreditTrainer":
         checkpoint = torch.load(str(path), map_location="cpu")
-        trainer = cls(input_dim=checkpoint["input_dim"], device=device)
+        arch = checkpoint.get("arch_config", {})
+        trainer = cls(
+            input_dim=checkpoint["input_dim"],
+            device=device,
+            hidden_layers=arch.get("hidden_layers"),
+            dropout_rates=arch.get("dropout_rates"),
+            use_batch_norm=arch.get("use_batch_norm", True),
+        )
         trainer.model.load_state_dict(checkpoint["state_dict"])
         trainer.history = checkpoint.get("history", {"train_loss": [], "val_loss": []})
         trainer.threshold = float(checkpoint.get("threshold", 0.5))

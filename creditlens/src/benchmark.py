@@ -94,28 +94,30 @@ def main() -> None:
     roc_data["MLP (CreditNet)"] = (y_test, prob_mlp)
 
     # 4. Stacking Ensemble
-    print("[benchmark] Обучение Stacking Ensemble...")
-    p_lr_train = logreg.predict_proba(X_train)[:, 1]
-    p_gb_train = gb.predict_proba(X_train)[:, 1]
-    p_mlp_train = trainer.predict_proba(X_train)
-    X_meta_train = np.column_stack([p_lr_train, p_gb_train, p_mlp_train])
-
-    meta = LogisticRegression(max_iter=2000, class_weight="balanced")
-    meta.fit(X_meta_train, y_train)
-
-    X_meta_test = np.column_stack([
-        logreg.predict_proba(X_test)[:, 1],
-        gb.predict_proba(X_test)[:, 1],
-        trainer.predict_proba(X_test),
-    ])
-    prob_ens = meta.predict_proba(X_meta_test)[:, 1]
-    metrics_ens = evaluate_binary_metrics(y_test, prob_ens, threshold=trainer.threshold)
-    results["Stacking Ensemble"] = metrics_ens
-    roc_data["Stacking Ensemble"] = (y_test, prob_ens)
+    ensemble_path = processed_dir / "ensemble.pkl"
+    if ensemble_path.exists():
+        print("[benchmark] Загрузка Ensemble (CV stacking)...")
+        ensemble_artifact = joblib.load(ensemble_path)
+        logreg = ensemble_artifact["logreg"]
+        gb = ensemble_artifact["gb"]
+        meta = ensemble_artifact["meta"]
+        threshold = float(ensemble_artifact.get("threshold", 0.5))
+        X_meta_test = np.column_stack([
+            logreg.predict_proba(X_test)[:, 1],
+            gb.predict_proba(X_test)[:, 1],
+            trainer.predict_proba(X_test),
+        ])
+        prob_ens = meta.predict_proba(X_meta_test)[:, 1]
+        metrics_ens = evaluate_binary_metrics(y_test, prob_ens, threshold=threshold)
+        results["Stacking Ensemble (CV)"] = metrics_ens
+        roc_data["Stacking Ensemble (CV)"] = (y_test, prob_ens)
+    else:
+        print("[benchmark] Ensemble не найден, пропускаем...")
+        results["Stacking Ensemble (CV)"] = {"roc_auc": 0.0, "pr_auc": 0.0, "f1": 0.0, "precision": 0.0, "recall": 0.0}
 
     # Сравнительная ROC-кривая
     fig, ax = plt.subplots(figsize=(9, 9))
-    colors = {"LogReg": "#3498db", "GradientBoosting": "#2ecc71", "MLP (CreditNet)": "#e74c3c", "Stacking Ensemble": "#9b59b6"}
+    colors = {"LogReg": "#3498db", "GradientBoosting": "#2ecc71", "MLP (CreditNet)": "#e74c3c", "Stacking Ensemble (CV)": "#9b59b6"}
     for name, (yt, yp) in roc_data.items():
         fpr, tpr, _ = roc_curve(yt, yp)
         auc = roc_auc_score(yt, yp)

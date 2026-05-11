@@ -31,7 +31,7 @@ setattr(__main__, "DatasetConfig", DatasetConfig)
 sys.modules["__main__"].DatasetConfig = DatasetConfig
 
 
-st.set_page_config(page_title="CreditLens", page_icon=None, layout="wide", initial_sidebar_state="expanded")
+st.set_page_config(page_title="CreditLens", page_icon="🧠", layout="wide", initial_sidebar_state="expanded")
 st.markdown(
     """
     <style>
@@ -44,31 +44,38 @@ st.markdown(
     .hero {
         padding: 40px;
         border-radius: 20px;
-        background: linear-gradient(135deg, rgba(88,101,242,0.12) 0%, rgba(34,197,94,0.1) 100%);
+        background: linear-gradient(135deg, rgba(88,101,242,0.15) 0%, rgba(34,197,94,0.12) 100%);
         border: 1px solid rgba(128,128,128,0.15);
         box-shadow: 0 10px 30px -10px rgba(0,0,0,0.1);
         margin-bottom: 30px;
+        animation: fadeIn 0.8s ease-out;
+    }
+    @keyframes fadeIn {
+        from { opacity: 0; transform: translateY(10px); }
+        to { opacity: 1; transform: translateY(0); }
     }
     .hero h1 { 
         margin: 0 0 10px 0; 
         color: var(--text-color); 
         font-weight: 800;
-        font-size: 2.5rem !important;
+        font-size: 2.8rem !important;
+        letter-spacing: -1px;
     }
     .hero p { 
         margin: 0; 
         color: var(--text-color); 
-        font-size: 1.1rem;
-        opacity: 0.85;
+        font-size: 1.15rem;
+        opacity: 0.9;
+        line-height: 1.5;
     }
     
     .metric-card {
-        padding: 24px;
+        padding: 28px;
         border-radius: 16px;
-        border: 1px solid rgba(128,128,128,0.2);
+        border: 1px solid rgba(128,128,128,0.15);
         background: var(--secondary-background-color);
         box-shadow: 0 4px 6px -1px rgba(0,0,0,0.05);
-        transition: transform 0.2s, box-shadow 0.2s;
+        transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
         text-align: center;
         display: flex;
         flex-direction: column;
@@ -77,21 +84,21 @@ st.markdown(
     }
     .metric-card:hover {
         transform: translateY(-5px);
-        box-shadow: 0 12px 20px -5px rgba(0,0,0,0.15);
+        box-shadow: 0 20px 25px -5px rgba(0,0,0,0.1), 0 10px 10px -5px rgba(0,0,0,0.04);
     }
     .metric-title {
-        font-size: 0.85rem;
+        font-size: 0.8rem;
         font-weight: 600;
         text-transform: uppercase;
-        letter-spacing: 1px;
-        opacity: 0.7;
-        margin-bottom: 8px;
+        letter-spacing: 1.5px;
+        opacity: 0.6;
+        margin-bottom: 10px;
     }
     .metric-value {
-        font-size: 2.5rem;
+        font-size: 2.8rem;
         font-weight: 800;
         margin: 0;
-        line-height: 1.2;
+        line-height: 1.1;
     }
     
     div[data-testid="stExpander"] details summary {
@@ -100,11 +107,37 @@ st.markdown(
     }
     
     .info-panel {
-        background: rgba(88,101,242,0.05);
+        background: rgba(88,101,242,0.06);
         border-left: 4px solid #5865F2;
         padding: 16px 20px;
         border-radius: 8px;
         margin: 10px 0;
+        transition: background 0.2s;
+    }
+    .info-panel:hover {
+        background: rgba(88,101,242,0.1);
+    }
+    
+    .badge {
+        display: inline-block;
+        padding: 4px 10px;
+        border-radius: 12px;
+        font-size: 0.75rem;
+        font-weight: 600;
+        margin-right: 6px;
+        margin-bottom: 6px;
+    }
+    .badge-blue { background: rgba(52,152,219,0.15); color: #2980b9; }
+    .badge-green { background: rgba(46,204,113,0.15); color: #27ae60; }
+    .badge-orange { background: rgba(230,126,34,0.15); color: #d35400; }
+    .badge-purple { background: rgba(155,89,182,0.15); color: #8e44ad; }
+    
+    .section-title {
+        font-size: 1.4rem;
+        font-weight: 700;
+        margin: 20px 0 12px 0;
+        padding-bottom: 8px;
+        border-bottom: 2px solid rgba(128,128,128,0.1);
     }
     </style>
     """,
@@ -114,8 +147,16 @@ st.markdown(
 st.markdown(
     """
     <div class="hero">
-        <h1> CreditLens</h1>
-        <p>Мы помогаем с умом подходить к финансовым решениям. Наш алгоритм не просто выдает ответ, но и подробно, по-человечески всё объясняет. Заполните небольшую анкету, чтобы получить разбор вашей ситуации и полезные персональные советы.</p>
+        <h1>🧠 CreditLens</h1>
+        <p>Интерпретируемая система кредитного скоринга на основе нейронных сетей.<br>
+        Наш алгоритм не просто выдаёт ответ, но и подробно, по-человечески всё объясняет. 
+        Заполните небольшую анкету, чтобы получить разбор вашей ситуации и полезные персональные советы.</p>
+        <div style="margin-top: 16px;">
+            <span class="badge badge-blue">PyTorch</span>
+            <span class="badge badge-green">SHAP</span>
+            <span class="badge badge-orange">Stacking</span>
+            <span class="badge badge-purple">Streamlit</span>
+        </div>
     </div>
     """,
     unsafe_allow_html=True,
@@ -383,7 +424,13 @@ if st.session_state.show_results:
         )
     st.markdown("<br/>", unsafe_allow_html=True)
     
-    tab1, tab2, tab3 = st.tabs([" Главный дашборд", " Инсайты и Факторы (SHAP)", " Моделирование (What-If)"])
+    tab1, tab2, tab3, tab4, tab5 = st.tabs([
+        " Главный дашборд",
+        " Инсайты и Факторы (SHAP)",
+        " Моделирование (What-If)",
+        " Исследования",
+        " О проекте",
+    ])
     
     with tab1:
 
@@ -497,6 +544,101 @@ if st.session_state.show_results:
             f"(изменение {delta*100:+.1f} п.п.)"
         )
 
+    with tab4:
+        st.markdown("<div class='section-title'>Исследование гиперпараметров (Ablation Study)</div>", unsafe_allow_html=True)
+        st.markdown(
+            "Мы провели 5-fold Stratified Cross-Validation для сравнения конфигураций нейронной сети. "
+            "Цель — найти оптимальный баланс между сложностью модели и её обобщающей способностью."
+        )
+
+        ablation_path = Path(__file__).resolve().parent / "reports" / "ablation_summary.json"
+        if ablation_path.exists():
+            ablation_data = json.loads(ablation_path.read_text(encoding="utf-8"))
+            experiments = ablation_data.get("experiments", {})
+
+            st.markdown("#### Сравнение конфигураций (mean ± std)")
+            rows = []
+            for name, res in experiments.items():
+                mean = res["mean"]
+                std = res["std"]
+                rows.append({
+                    "Конфигурация": name,
+                    "ROC-AUC": f"{mean['roc_auc']:.4f} ± {std['roc_auc']:.4f}",
+                    "PR-AUC": f"{mean['pr_auc']:.4f} ± {std['pr_auc']:.4f}",
+                    "F1": f"{mean['f1']:.4f} ± {std['f1']:.4f}",
+                    "Precision": f"{mean['precision']:.4f} ± {std['precision']:.4f}",
+                    "Recall": f"{mean['recall']:.4f} ± {std['recall']:.4f}",
+                })
+            st.dataframe(pd.DataFrame(rows), hide_index=True, use_container_width=True)
+
+            best = ablation_data.get("best_config", "—")
+            test_m = ablation_data.get("test_metrics", {})
+            st.success(f"🏆 Лучшая конфигурация по CV: **{best}** | ROC-AUC на тесте: **{test_m.get('roc_auc', 0):.4f}**")
+
+            ablation_plot = Path(__file__).resolve().parent / "data" / "plots" / "german" / "ablation" / "ablation_barplot.png"
+            if ablation_plot.exists():
+                st.image(str(ablation_plot), caption="Сравнение метрик по конфигурациям", use_column_width=True)
+        else:
+            st.info("Ablation Study ещё не проведён. Запустите `python src/hyperparam_study.py`.")
+
+        st.markdown("<div class='section-title'>Ключевые выводы</div>", unsafe_allow_html=True)
+        st.markdown(
+            """
+            - **High Dropout** (0.5/0.4/0.3) показал наилучший ROC-AUC и PR-AUC, подтвердив гипотезу о переобучении baseline.
+            - **Уменьшение архитектуры** (128→64→32) привело к снижению качества — модель недообучается.
+            - **Порог 0.7** сильно повышает Precision (~0.59), но режет Recall до ~0.41. Это консервативная политика.
+            - **CV Stacking Ensemble** с OOF-предсказаниями улучшил ROC-AUC с 0.787 до **0.817**.
+            """
+        )
+
+    with tab5:
+        st.markdown("<div class='section-title'>О проекте CreditLens</div>", unsafe_allow_html=True)
+        st.markdown(
+            """
+            **CreditLens** — курсовой проект по дисциплине «Нейронные сети и искусственный интеллект».
+            
+            #### Архитектура решения
+            ```
+            Данные → Предобработка → MLP (CreditNet) → SHAP → Текстовое объяснение
+                                    ↓
+                              Stacking Ensemble
+            ```
+            
+            #### Технологии
+            """
+        )
+        tech_cols = st.columns(5)
+        badges = [
+            ("PyTorch", "#ee4c2c", "Фреймворк DL"),
+            ("SHAP", "#2ecc71", "Интерпретация"),
+            ("scikit-learn", "#3498db", "ML модели"),
+            ("Streamlit", "#e74c3c", "Веб-UI"),
+            ("FastAPI", "#9b59b6", "REST API"),
+        ]
+        for col, (name, color, desc) in zip(tech_cols, badges):
+            col.markdown(
+                f"<div style='text-align:center; padding:12px; border-radius:12px; background:{color}15;'>"
+                f"<div style='font-weight:700; color:{color};'>{name}</div>"
+                f"<div style='font-size:0.8rem; opacity:0.7;'>{desc}</div></div>",
+                unsafe_allow_html=True,
+            )
+
+        st.markdown(
+            """
+            #### Особенности
+            - **Конфигурируемая нейросеть** с BatchNorm, Dropout и Early Stopping
+            - **5-fold CV** для оценки качества и генерации meta-признаков
+            - **SHAP-объяснения** с переводом в человекочитаемый текст
+            - **What-if анализ** для подбора параметров кредита
+            - **Автоматизированный пайплайн** через Makefile
+            """
+        )
+
+        report_path = Path(__file__).resolve().parent / ".." / "PROJECT_REPORT.md"
+        st.markdown(
+            "📄 Подробный академический отчёт доступен в файле `PROJECT_REPORT.md` в корне проекта."
+        )
+
     report = {
         "timestamp": datetime.now().isoformat(timespec="seconds"),
         "probability_default": round(pred, 6),
@@ -514,15 +656,16 @@ if st.session_state.show_results:
         width="stretch",
     )
 
-    st.subheader("Что мы планируем добавить в будущем")
+    st.markdown("<div class='section-title'>Дорожная карта</div>", unsafe_allow_html=True)
     roadmap_df = pd.DataFrame(
         [
-            {"Фича": "Загрузка анкеты из CRM", "Польза": "Исключает ручной ввод и ускоряет оценку", "Статус": "MVP-ready"},
-            {"Фича": "Сегментный риск по профессиям/возрастам", "Польза": "Точнее политика одобрения", "Статус": "Реализовано"},
-            {"Фича": "Авто-рекомендации клиенту", "Польза": "Показывает как повысить шанс одобрения", "Статус": "Реализовано"},
-            {"Фича": "Мониторинг дрейфа качества", "Польза": "Контроль деградации модели в проде", "Статус": "Backlog"},
+            {"Фича": "Ablation Study (исследование гиперпараметров)", "Польза": "Научно обоснованный выбор архитектуры", "Статус": "✅ Реализовано"},
+            {"Фича": "CV Stacking Ensemble", "Польза": "Повышение качества через OOF-метаобучение", "Статус": "✅ Реализовано"},
+            {"Фича": "Сегментный риск по профессиям/возрастам", "Польза": "Точнее политика одобрения", "Статус": "✅ Реализовано"},
+            {"Фича": "Авто-рекомендации клиенту", "Польза": "Показывает как повысить шанс одобрения", "Статус": "✅ Реализовано"},
+            {"Фича": "Мониторинг дрейфа качества", "Польза": "Контроль деградации модели в проде", "Статус": "📋 Backlog"},
         ]
     )
-    st.dataframe(roadmap_df, width="stretch", hide_index=True)
+    st.dataframe(roadmap_df, hide_index=True, use_container_width=True)
 else:
     st.info("Пожалуйста, заполните данные в меню слева и нажмите «Узнать результат» — мы проанализируем ваш профиль.", icon=None)

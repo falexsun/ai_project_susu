@@ -238,3 +238,43 @@ def compare_models_table(
         save_path.write_text(table, encoding="utf-8")
         print(f"[report] Таблица сравнения сохранена: {save_path}")
     return table
+
+
+def plot_ablation_barplot(
+    results: dict[str, dict[str, dict[str, float]]],
+    save_path: Path | None = None,
+    title: str = "Ablation Study (5-fold CV)",
+) -> None:
+    """Строит bar-plot сравнения конфигураций с error bars.
+
+    Args:
+        results: {config_name: {'mean': {metric: val}, 'std': {metric: val}}}.
+        save_path: Путь для сохранения.
+        title: Заголовок графика.
+    """
+    import matplotlib.pyplot as plt
+
+    names = list(results.keys())
+    x = np.arange(len(names))
+    width = 0.15
+    metrics_keys = ["roc_auc", "pr_auc", "f1", "precision", "recall"]
+    colors = ["#3498db", "#2ecc71", "#f1c40f", "#e74c3c", "#9b59b6"]
+
+    fig, ax = plt.subplots(figsize=(12, 7))
+    for i, (metric, color) in enumerate(zip(metrics_keys, colors)):
+        means = [results[n]["mean"][metric] for n in names]
+        stds = [results[n]["std"][metric] for n in names]
+        ax.bar(x + i * width, means, width, yerr=stds, label=metric, color=color, capsize=3, alpha=0.85)
+
+    ax.set_ylabel("Значение метрики")
+    ax.set_title(title)
+    ax.set_xticks(x + width * 2)
+    ax.set_xticklabels(names, rotation=15, ha="right")
+    ax.legend(loc="lower right")
+    ax.grid(True, axis="y", linestyle="--", alpha=0.5)
+    ax.set_ylim(0, 1.05)
+    plt.tight_layout()
+    if save_path:
+        plt.savefig(save_path, dpi=150, bbox_inches="tight")
+        print(f"[plot] Ablation barplot сохранён: {save_path}")
+    plt.close(fig)
