@@ -32,8 +32,8 @@ FEATURE_TEMPLATES = {
 CODEBOOK = {
     "Status": {
         "A11": "на расчетном счете отрицательный остаток",
-        "A12": "на счете от 0 до 200 DM",
-        "A13": "на счете более 200 DM или зарплатный счет более года",
+        "A12": "на счете от 0 до 10 000 ₽",
+        "A13": "на счете более 10 000 ₽ или зарплатный счет более года",
         "A14": "расчетного счета нет",
     },
     "History": {
@@ -57,10 +57,10 @@ CODEBOOK = {
         "A410": "прочие цели",
     },
     "Savings": {
-        "A61": "сбережения меньше 100 DM",
-        "A62": "сбережения от 100 до 500 DM",
-        "A63": "сбережения от 500 до 1000 DM",
-        "A64": "сбережения больше 1000 DM",
+        "A61": "сбережения меньше 5 000 ₽",
+        "A62": "сбережения от 5 000 до 25 000 ₽",
+        "A63": "сбережения от 25 000 до 50 000 ₽",
+        "A64": "сбережения больше 50 000 ₽",
         "A65": "сбережения неизвестны или отсутствуют",
     },
     "Employment": {
@@ -139,88 +139,61 @@ def _normalize_feature_name(feature_name: str) -> str:
     return humanize_feature_name(feature_name)
 
 
-import random
-
 def generate_explanation(shap_dict: dict[str, Any]) -> str:
+    """Генерирует человекочитаемое объяснение решения модели.
+    
+    NOTE: упрощенная версия, без random.choice из шаблонов — 
+    делаем один последовательный текст, чтобы не звучало роботом.
+    """
     shap_values = np.asarray(shap_dict["shap_values"])
     feature_names = list(shap_dict["feature_names"])
     prediction = float(shap_dict["prediction"])
 
     decision = "высокий риск (вероятен отказ)" if prediction >= 0.5 else "умеренный риск (вероятно одобрение)"
 
-    pos_idx = np.argsort(shap_values)[-4:][::-1]
-    neg_idx = np.argsort(shap_values)[:4]
+    pos_idx = np.argsort(shap_values)[-3:][::-1]
+    neg_idx = np.argsort(shap_values)[:3]
     
     risk_factors: list[str] = []
     for i in pos_idx:
         if shap_values[i] > 0:
-            name = _normalize_feature_name(feature_names[i])
-            risk_factors.append(f"{name} (повышает риск)")
+            risk_factors.append(_normalize_feature_name(feature_names[i]))
 
     protective_factors: list[str] = []
     for i in neg_idx:
         if shap_values[i] < 0:
-            name = _normalize_feature_name(feature_names[i])
-            protective_factors.append(f"{name} (снижает риск)")
+            protective_factors.append(_normalize_feature_name(feature_names[i]))
 
-    risk_text = "; ".join(risk_factors) if risk_factors else "существенных риск-факторов не найдено"
-    prot_text = "; ".join(protective_factors) if protective_factors else "положительных факторов мало"
-
-    confidence = "высокая" if prediction >= 0.7 or prediction <= 0.3 else "средняя"
+    parts = [f"Итог оценки: {decision}. Вероятность проблем с выплатой — {prediction * 100:.1f}%."]
     
-    templates = [
-        (
-            f"Итог оценки: {decision}. "
-            f"Риск затруднений при выплате мы оцениваем в {prediction * 100:.1f}%. "
-            f"Уверенность нашей системы: {confidence}. "
-            f"Что увеличило риск: {risk_text}. "
-            f"Что помогло снизить риск: {prot_text}."
-        ),
-        (
-            f"На основе ваших данных мы прогнозируем {decision}. "
-            f"Модель оценивает вероятность проблем с кредитом в {prediction * 100:.1f}% (уверенность: {confidence}). "
-            f"Основные факторы риска: {risk_text}. "
-            f"Позитивные факторы: {prot_text}."
-        ),
-        (
-            f"Система проанализировала анкету и выявила {decision} с вероятностью {prediction * 100:.1f}%. "
-            f"Степень уверенности алгоритма: {confidence}. "
-            f"Обратите внимание на эти моменты: {risk_text}. "
-            f"Смягчающие обстоятельства: {prot_text}."
-        ),
-        (
-             f"Вердикт алгоритма: {decision}. "
-             f"Шанс возникновения трудностей с платежами около {prediction * 100:.1f}% (с уверенностью уровня '{confidence}'). "
-             f"Главные барьеры для одобрения: {risk_text}. "
-             f"Ваши сильные стороны: {prot_text}."
-        )
-    ]
+    if risk_factors:
+        parts.append("Факторы, которые увеличили риск: " + ", ".join(risk_factors) + ".")
+    if protective_factors:
+        parts.append("Факторы, которые сработали в пользу клиента: " + ", ".join(protective_factors) + ".")
 
-    return random.choice(templates)
+    return " ".join(parts)
 
 
 def explain_waterfall_for_user() -> str:
     return (
-        "Как читать график SHAP простыми словами: "
-        "график показывает, почему модель выдала именно такой риск. "
-        "Каждая строка - это один фактор клиента. "
-        "Красные факторы двигают риск возникновения трудностей с выплатой вверх (хуже), "
-        "зеленые - вниз (лучше). "
-        "Чем длиннее полоска, тем сильнее влияние этого фактора. "
-        "Верхние строки на графике - самые важные причины решения."
+        "График SHAP показывает, почему модель приняла именно такое решение. "
+        "Каждая строка — отдельный фактор клиента. "
+        "Красные полосы толкают оценку риска вверх, зеленые — вниз. "
+        "Чем длиннее полоса, тем сильнее влияние. "
+        "Самые важные причины решения — вверху графика."
     )
 
 
 RECOMMENDATIONS = {
-    "Amount": "Снизить сумму кредита или увеличить первоначальный взнос.",
-    "Duration": "Подобрать более комфортный срок кредита и платеж под доход.",
-    "InstallmentRate": "Уменьшить долговую нагрузку: снизить ежемесячный платеж или закрыть часть обязательств.",
-    "History": "Укрепить платежную дисциплину: избегать просрочек в ближайшие месяцы.",
-    "Employment": "Подтвердить стабильную занятость и стаж документами.",
-    "Status": "Предоставить дополнительные финансовые подтверждения (выписки, регулярные поступления).",
-    "Savings": "Показать накопления или финансовую подушку.",
-    "ExistingCredits": "По возможности сократить число активных кредитов перед новой заявкой.",
-    "Dependents": "Подтвердить дополнительные источники дохода семьи.",
+    "Amount": "Снизьте сумму кредита или увеличьте первоначальный взнос.",
+    "Duration": "Подберите срок так, чтобы платеж не превышал 25% дохода.",
+    "InstallmentRate": "Уменьшите долговую нагрузку: снизьте ежемесячный платеж или закройте часть обязательств.",
+    "History": "Укрепите платежную дисциплину: избегайте просрочек в ближайшие 6–12 месяцев.",
+    "Employment": "Подтвердите стабильную занятость справками и выписками.",
+    "Status": "Предоставьте дополнительные финансовые подтверждения (выписки, поступления на счет).",
+    "Savings": "Покажите накопления или финансовую подушку безопасности.",
+    "ExistingCredits": "По возможности сократите число активных кредитов перед подачей заявки.",
+    "Dependents": "Подтвердите дополнительные источники дохода семьи.",
 }
 
 
@@ -251,7 +224,7 @@ def generate_human_brief(shap_dict: dict[str, Any]) -> dict[str, Any]:
             tips.append(rec)
 
     if not tips:
-        tips.append("Критичных факторов не видно. Поддерживайте текущую платежную дисциплину.")
+        tips.append("Критичных факторов не выявлено. Поддерживайте текущую платежную дисциплину.")
 
     risk_level = "высокий" if prediction >= 0.65 else "средний" if prediction >= 0.35 else "низкий"
 
@@ -262,12 +235,13 @@ def generate_human_brief(shap_dict: dict[str, Any]) -> dict[str, Any]:
         "tips": tips[:3],
     }
 
+
 def generate_segment_risk(age: int, job_type: str) -> dict[str, str]:
     if age < 25:
         age_group = "Молодежь (до 25 лет)"
         age_risk = "Повышенный риск из-за потенциальной нестабильности доходов."
     elif 25 <= age <= 50:
-        age_group = "Средний возраст (25-50 лет)"
+        age_group = "Средний возраст (25–50 лет)"
         age_risk = "Минимальный риск, как правило, наиболее стабильная платежеспособность."
     else:
         age_group = "Старший возраст (старше 50 лет)"
@@ -288,6 +262,7 @@ def generate_segment_risk(age: int, job_type: str) -> dict[str, str]:
         "job_risk": job_risk_desc
     }
 
+
 def generate_auto_recommendations(shap_dict: dict[str, Any], amount: int, duration: int) -> list[str]:
     shap_values = np.asarray(shap_dict["shap_values"])
     feature_names = list(shap_dict["feature_names"])
@@ -300,7 +275,7 @@ def generate_auto_recommendations(shap_dict: dict[str, Any], amount: int, durati
     
     if amount_idx != -1 and shap_values[amount_idx] > 0:
         suggested_amount = int(amount * 0.8)
-        recommendations.append(f"Уменьшите запрашиваемую сумму примерно до {suggested_amount} DM, чтобы снизить кредитную нагрузку.")
+        recommendations.append(f"Уменьшите запрашиваемую сумму примерно до {suggested_amount} ₽, чтобы снизить кредитную нагрузку.")
         
     if duration_idx != -1 and shap_values[duration_idx] > 0:
         suggested_duration = min(72, int(duration * 1.2) if duration < 48 else max(6, int(duration * 0.8)))

@@ -1,0 +1,98 @@
+/* CreditLens — custom styles
+ * TODO: move to a proper design-system later, this is a quick fix
+ * Author: backend team, patched up for demo
+ */
+
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap');
+
+html, body, [class*="css"] {
+    font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif !important;
+    -webkit-font-smoothing: antialiased;
+}
+
+/* ---- Header block ---- */
+.cl-header {
+    padding: 28px 32px;
+    border-radius: 10px;
+    background: #0f172a;
+    margin-bottom: 24px;
+    border: 1px solid #1e293b;
+}
+.cl-header h1 {
+    margin: 0 0 6px 0;
+    color: #f8fafc;
+    font-weight: 700;
+    font-size: 1.6rem !important;
+    letter-spacing: -0.02em;
+}
+.cl-header p {
+    margin: 0;
+    color: #94a3b8;
+    font-size: 0.9rem;
+    line-height: 1.5;
+    max-width: 600px;
+}
+
+/* ---- Metric cards ---- */
+.cl-metric {
+    padding: 20px 22px;
+    border-radius: 8px;
+    background: #ffffff;
+    border: 1px solid #e2e8f0;
+    text-align: left;
+}
+.cl-metric-label {
+    font-size: 0.7rem;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+    color: #64748b;
+    margin-bottom: 6px;
+}
+.cl-metric-value {
+    font-size: 1.75rem;
+    font-weight: 700;
+    line-height: 1.2;
+    color: #0f172a;
+}
+
+/* ---- Recommendation panels ---- */
+.cl-rec {
+    padding: 12px 16px;
+    border-radius: 6px;
+    background: #f8fafc;
+    border-left: 3px solid #2563eb;
+    margin: 6px 0;
+    font-size: 0.88rem;
+    color: #1e293b;
+    line-height: 1.5;
+}
+
+/* ---- Section dividers ---- */
+.cl-section {
+    font-size: 0.95rem;
+    font-weight: 600;
+    color: #0f172a;
+    margin: 28px 0 14px 0;
+    padding-bottom: 6px;
+    border-bottom: 1px solid #e2e8f0;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+}
+
+/* ---- Utility text ---- */
+.cl-muted {
+    color: #64748b;
+    font-size: 0.85rem;
+    line-height: 1.5;
+}
+.cl-small {
+    font-size: 0.75rem;
+    color: #94a3b8;
+}
+
+/* ---- Streamlit overrides (keep minimal) ---- */
+/* sidebar label spacing */
+.css-1lcbmhc p {
+    margin-bottom: 0.3rem !important;
+}

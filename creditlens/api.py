@@ -14,7 +14,7 @@ from pydantic import BaseModel, Field
 from src.model import CreditTrainer, get_processed_dir
 from src.preprocess import DATASET_CONFIGS, CreditPreprocessor, DatasetConfig
 
-
+# monkey-patch for joblib compat
 setattr(__main__, "CreditPreprocessor", CreditPreprocessor)
 sys.modules["__main__"].CreditPreprocessor = CreditPreprocessor
 setattr(__main__, "DatasetConfig", DatasetConfig)
@@ -22,13 +22,22 @@ sys.modules["__main__"].DatasetConfig = DatasetConfig
 
 
 class PredictRequest(BaseModel):
-    dataset: str = Field(default="german", description="Имя датасета/схемы")
+    dataset: str = Field(default="german", description="Имя датасета / схемы")
     client_data: dict[str, Any] = Field(description="Признаки клиента в формате key:value")
+
+
+class PredictResponse(BaseModel):
+    dataset: str
+    model_type: str
+    probability_default: float
+    threshold: float
+    decision: str
+    risk_level: str
 
 
 app = FastAPI(
     title="CreditLens API",
-    description="API расчета вероятности дефолта клиента на основе ensemble-модели",
+    description="API расчета вероятности дефолта на основе ensemble-модели",
     version="1.0.0",
 )
 
@@ -48,14 +57,14 @@ def _load_artifacts(dataset: str) -> tuple[Any, Any, CreditTrainer]:
         raise HTTPException(
             status_code=404,
             detail=(
-                f"Не найден preprocessor: {preprocessor_path}. "
-                f"Сначала выполните preprocess для dataset={dataset}."
+                f"Preprocessor не найден: {preprocessor_path}. "
+                f"Сначала выполните препроцессинг для dataset={dataset}."
             ),
         )
     if not mlp_path.exists():
         raise HTTPException(
             status_code=404,
-            detail=f"Не найдена MLP модель: {mlp_path}. Сначала выполните обучение model.py.",
+            detail=f"MLP модель не найдена: {mlp_path}. Сначала обучите модель.",
         )
 
     preprocessor = joblib.load(preprocessor_path)
@@ -80,9 +89,17 @@ def _predict_proba(X: np.ndarray, ensemble_artifact: Any, trainer: CreditTrainer
     return p_ens, "ensemble"
 
 
+def _risk_level(prob: float, threshold: float) -> str:
+    if prob < threshold * 0.7:
+        return "low"
+    if prob < threshold:
+        return "medium"
+    return "high"
+
+
 @app.get("/")
 def healthcheck() -> dict[str, str]:
-    return {"status": "ok", "service": "CreditLens API"}
+    return {"status": "ok", "service": "creditlens-api"}
 
 
 @app.get("/datasets")
@@ -99,11 +116,11 @@ def get_schema(dataset: str) -> dict[str, Any]:
         "dataset": dataset,
         "required_client_fields": feature_columns,
         "fields_count": len(feature_columns),
-        "note": "Передавайте JSON с полями из required_client_fields.",
+        "note": "Передайте JSON с полями из required_client_fields.",
     }
 
 
-@app.post("/predict")
+@app.post("/predict", response_model=PredictResponse)
 def predict(request: PredictRequest) -> dict[str, Any]:
     preprocessor, ensemble_artifact, trainer = _load_artifacts(request.dataset)
 
@@ -134,6 +151,7 @@ def predict(request: PredictRequest) -> dict[str, Any]:
         threshold = float(getattr(trainer, "threshold", 0.5))
 
     decision = "REJECT" if probability_default >= threshold else "APPROVE"
+    risk_level = _risk_level(probability_default, threshold)
 
     return {
         "dataset": request.dataset,
@@ -141,4 +159,5 @@ def predict(request: PredictRequest) -> dict[str, Any]:
         "probability_default": probability_default,
         "threshold": threshold,
         "decision": decision,
+        "risk_level": risk_level,
     }

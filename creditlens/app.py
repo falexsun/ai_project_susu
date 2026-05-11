@@ -24,139 +24,36 @@ from src.text_generator import (
     generate_auto_recommendations,
 )
 
-
+# ---------------------------------------------------------------------------
+# monkey-patch so joblib can find the classes
+# ---------------------------------------------------------------------------
 setattr(__main__, "CreditPreprocessor", CreditPreprocessor)
 sys.modules["__main__"].CreditPreprocessor = CreditPreprocessor
 setattr(__main__, "DatasetConfig", DatasetConfig)
 sys.modules["__main__"].DatasetConfig = DatasetConfig
 
+DM_TO_RUB = 50
 
-st.set_page_config(page_title="CreditLens", page_icon="🧠", layout="wide", initial_sidebar_state="expanded")
-st.markdown(
-    """
-    <style>
-    @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;600;700&display=swap');
-    
-    html, body, [class*="css"]  {
-        font-family: 'Inter', sans-serif !important;
-    }
-    
-    .hero {
-        padding: 40px;
-        border-radius: 20px;
-        background: linear-gradient(135deg, rgba(88,101,242,0.15) 0%, rgba(34,197,94,0.12) 100%);
-        border: 1px solid rgba(128,128,128,0.15);
-        box-shadow: 0 10px 30px -10px rgba(0,0,0,0.1);
-        margin-bottom: 30px;
-        animation: fadeIn 0.8s ease-out;
-    }
-    @keyframes fadeIn {
-        from { opacity: 0; transform: translateY(10px); }
-        to { opacity: 1; transform: translateY(0); }
-    }
-    .hero h1 { 
-        margin: 0 0 10px 0; 
-        color: var(--text-color); 
-        font-weight: 800;
-        font-size: 2.8rem !important;
-        letter-spacing: -1px;
-    }
-    .hero p { 
-        margin: 0; 
-        color: var(--text-color); 
-        font-size: 1.15rem;
-        opacity: 0.9;
-        line-height: 1.5;
-    }
-    
-    .metric-card {
-        padding: 28px;
-        border-radius: 16px;
-        border: 1px solid rgba(128,128,128,0.15);
-        background: var(--secondary-background-color);
-        box-shadow: 0 4px 6px -1px rgba(0,0,0,0.05);
-        transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
-        text-align: center;
-        display: flex;
-        flex-direction: column;
-        justify-content: center;
-        height: 100%;
-    }
-    .metric-card:hover {
-        transform: translateY(-5px);
-        box-shadow: 0 20px 25px -5px rgba(0,0,0,0.1), 0 10px 10px -5px rgba(0,0,0,0.04);
-    }
-    .metric-title {
-        font-size: 0.8rem;
-        font-weight: 600;
-        text-transform: uppercase;
-        letter-spacing: 1.5px;
-        opacity: 0.6;
-        margin-bottom: 10px;
-    }
-    .metric-value {
-        font-size: 2.8rem;
-        font-weight: 800;
-        margin: 0;
-        line-height: 1.1;
-    }
-    
-    div[data-testid="stExpander"] details summary {
-        font-weight: 600 !important;
-        letter-spacing: 0.5px;
-    }
-    
-    .info-panel {
-        background: rgba(88,101,242,0.06);
-        border-left: 4px solid #5865F2;
-        padding: 16px 20px;
-        border-radius: 8px;
-        margin: 10px 0;
-        transition: background 0.2s;
-    }
-    .info-panel:hover {
-        background: rgba(88,101,242,0.1);
-    }
-    
-    .badge {
-        display: inline-block;
-        padding: 4px 10px;
-        border-radius: 12px;
-        font-size: 0.75rem;
-        font-weight: 600;
-        margin-right: 6px;
-        margin-bottom: 6px;
-    }
-    .badge-blue { background: rgba(52,152,219,0.15); color: #2980b9; }
-    .badge-green { background: rgba(46,204,113,0.15); color: #27ae60; }
-    .badge-orange { background: rgba(230,126,34,0.15); color: #d35400; }
-    .badge-purple { background: rgba(155,89,182,0.15); color: #8e44ad; }
-    
-    .section-title {
-        font-size: 1.4rem;
-        font-weight: 700;
-        margin: 20px 0 12px 0;
-        padding-bottom: 8px;
-        border-bottom: 2px solid rgba(128,128,128,0.1);
-    }
-    </style>
-    """,
-    unsafe_allow_html=True,
+st.set_page_config(
+    page_title="CreditLens",
+    page_icon="📊",
+    layout="wide",
+    initial_sidebar_state="expanded",
 )
 
+# inject custom css — quick'n'dirty way, should be refactored
+_css_path = Path(__file__).resolve().parent / "assets" / "custom.css"
+if _css_path.exists():
+    st.markdown(f"<style>{_css_path.read_text(encoding='utf-8')}</style>", unsafe_allow_html=True)
+
+# ---------------------------------------------------------------------------
+# Header
+# ---------------------------------------------------------------------------
 st.markdown(
     """
-    <div class="hero">
-        <h1>🧠 CreditLens</h1>
-        <p>Интерпретируемая система кредитного скоринга на основе нейронных сетей.<br>
-        Наш алгоритм не просто выдаёт ответ, но и подробно, по-человечески всё объясняет. 
-        Заполните небольшую анкету, чтобы получить разбор вашей ситуации и полезные персональные советы.</p>
-        <div style="margin-top: 16px;">
-            <span class="badge badge-blue">PyTorch</span>
-            <span class="badge badge-green">SHAP</span>
-            <span class="badge badge-orange">Stacking</span>
-            <span class="badge badge-purple">Streamlit</span>
-        </div>
+    <div class="cl-header">
+        <h1>CreditLens</h1>
+        <p>Скоринговая система с интерпретацией решений. Заполните профиль клиента, чтобы получить оценку риска и рекомендации.</p>
     </div>
     """,
     unsafe_allow_html=True,
@@ -201,7 +98,7 @@ def build_input_df(
     phone: str,
     foreign: str,
 ) -> pd.DataFrame:
-    # Для transform нужен полный набор полей german-датасета.
+    # полный набор полей german-датасета для preprocessor.transform
     defaults = {
         "Status": status,
         "Duration": duration,
@@ -229,6 +126,9 @@ def build_input_df(
 
 trainer, preprocessor, feature_names, X_train, X_test = load_artifacts()
 
+# ---------------------------------------------------------------------------
+# Mappings — ручной перевод категорий датасета в человекочитаемые labels
+# ---------------------------------------------------------------------------
 history_map = {
     "ранее кредиты погашались вовремя": "A30",
     "кредиты в этом банке закрыты": "A31",
@@ -251,16 +151,16 @@ purpose_map = {
 }
 status_map = {
     "нет расчетного счета": "A14",
-    "отрицательный остаток (<0 DM)": "A11",
-    "от 0 до 200 DM": "A12",
-    "свыше 200 DM / зарплатный счет": "A13",
+    "отрицательный остаток (<0 ₽)": "A11",
+    "от 0 до 10 000 ₽": "A12",
+    "свыше 10 000 ₽ / зарплатный счет": "A13",
 }
 savings_map = {
     "сбережений нет или неизвестно": "A65",
-    "менее 100 DM": "A61",
-    "100–500 DM": "A62",
-    "500–1000 DM": "A63",
-    "более 1000 DM": "A64",
+    "менее 5 000 ₽": "A61",
+    "5 000 – 25 000 ₽": "A62",
+    "25 000 – 50 000 ₽": "A63",
+    "более 50 000 ₽": "A64",
 }
 employment_tenure_map = {
     "безработный": "A71",
@@ -283,7 +183,7 @@ personal_status_map = {
     "женщина, не замужем": "A95",
 }
 installment_rate_map = {
-    "≥ 35% от дохода (4)": 4,
+    ">= 35% от дохода (4)": 4,
     "25% - 35% от дохода (3)": 3,
     "20% - 25% от дохода (2)": 2,
     "< 20% от дохода (1)": 1,
@@ -328,47 +228,54 @@ foreign_map = {
     "нет": "A202",
 }
 
+# ---------------------------------------------------------------------------
+# Sidebar — форма
+# ---------------------------------------------------------------------------
 with st.sidebar:
-    st.header(" Анкета клиента")
+    st.header("Профиль клиента")
 
-    st.markdown("###  Основные параметры")
+    st.markdown("<p class='cl-muted' style='margin-bottom:12px;'>Основные параметры</p>", unsafe_allow_html=True)
     age = st.slider("Возраст", 18, 75, 35)
-    amount = st.slider("Сумма кредита", 500, 20000, 5000, step=100)
-    duration = st.slider("Срок кредита (мес)", 6, 72, 24)
+    amount_rub = st.slider("Сумма кредита, ₽", 25000, 1000000, 250000, step=5000)
+    duration = st.slider("Срок, месяцев", 6, 72, 24)
 
     status_rus = st.selectbox("Статус расчетного счета", list(status_map.keys()))
     history_rus = st.selectbox("Кредитная история", list(history_map.keys()))
     purpose_rus = st.selectbox("Цель кредита", list(purpose_map.keys()))
     tenure_rus = st.selectbox("Стаж занятости", list(employment_tenure_map.keys()))
 
-    with st.expander(" Расширенные параметры", expanded=False):
+    with st.expander("Расширенные параметры", expanded=False):
         savings_rus = st.selectbox("Сбережения", list(savings_map.keys()))
         job_rus = st.selectbox("Квалификация работы", list(job_map.keys()))
         installment_rate_rus = st.selectbox("Платежная нагрузка", list(installment_rate_map.keys()))
         installment_rate = installment_rate_map[installment_rate_rus]
         personal_status_rus = st.selectbox("Семейный статус", list(personal_status_map.keys()))
-        guarantors_rus = st.selectbox("Поручители/созаемщики", list(guarantors_map.keys()))
+        guarantors_rus = st.selectbox("Поручители / созаемщики", list(guarantors_map.keys()))
         residence_rus = st.selectbox("Срок проживания", list(residence_map.keys()))
         residence = residence_map[residence_rus]
         property_rus = st.selectbox("Тип имущества", list(property_map.keys()))
         other_installments_rus = st.selectbox("Другие рассрочки", list(other_installments_map.keys()))
         housing_rus = st.selectbox("Тип жилья", list(housing_map.keys()))
         existing_credits = st.slider("Действующие кредиты", 1, 4, 1)
-        dependents_rus = st.selectbox("Количество иждивенцев", list(dependents_map.keys()))
+        dependents_rus = st.selectbox("Иждивенцы", list(dependents_map.keys()))
         dependents = dependents_map[dependents_rus]
-        phone_rus = st.selectbox("Подтвержденный телефон", list(phone_map.keys()))
+        phone_rus = st.selectbox("Телефон подтвержден", list(phone_map.keys()))
         foreign_rus = st.selectbox("Иностранный заемщик", list(foreign_map.keys()))
 
     st.markdown("<br/>", unsafe_allow_html=True)
-    run_button = st.button(" Узнать результат", type="primary", use_container_width=True)
+    run_button = st.button("Оценить", type="primary", use_container_width=True)
 
 if run_button:
     st.session_state.show_results = True
 
+# ---------------------------------------------------------------------------
+# Main content — результаты
+# ---------------------------------------------------------------------------
 if st.session_state.show_results:
+    amount_dm = int(amount_rub / DM_TO_RUB)
     row = build_input_df(
         age=age,
-        amount=amount,
+        amount=amount_dm,
         duration=duration,
         status=status_map[status_rus],
         history=history_map[history_rus],
@@ -395,104 +302,159 @@ if st.session_state.show_results:
 
     approved = pred < threshold
     decision = "Одобрено" if approved else "Отказ"
-    color = "#17c964" if approved else "#f31260"
+    decision_color = "#16a34a" if approved else "#dc2626"
 
-    st.markdown("<br/>", unsafe_allow_html=True)
-    
-    col_a, col_b, col_c = st.columns(3)
-    with col_a:
+    # ---- metrics row ----
+    c1, c2, c3 = st.columns(3)
+    with c1:
         st.markdown(
-            f"""<div class='metric-card'>
-                <div class='metric-title'>Наш вердикт</div>
-                <div class='metric-value' style='color:{color};'>{decision}</div>
-            </div>""", unsafe_allow_html=True
+            f"""<div class='cl-metric'>
+                <div class='cl-metric-label'>Решение</div>
+                <div class='cl-metric-value' style='color:{decision_color};'>{decision}</div>
+            </div>""",
+            unsafe_allow_html=True,
         )
-    with col_b:
-        prob_color = "#f31260" if pred >= threshold else "#17c964" if pred < threshold * 0.7 else "#f5a524"
+    with c2:
+        risk_color = "#dc2626" if pred >= threshold else "#16a34a" if pred < threshold * 0.7 else "#d97706"
         st.markdown(
-            f"""<div class='metric-card'>
-                <div class='metric-title'>Оценка риска</div>
-                <div class='metric-value' style='color:{prob_color};'>{pred*100:.1f}%</div>
-            </div>""", unsafe_allow_html=True
+            f"""<div class='cl-metric'>
+                <div class='cl-metric-label'>Вероятность дефолта</div>
+                <div class='cl-metric-value' style='color:{risk_color};'>{pred*100:.1f}%</div>
+            </div>""",
+            unsafe_allow_html=True,
         )
-    with col_c:
+    with c3:
         st.markdown(
-            f"""<div class='metric-card'>
-                <div class='metric-title'>Допустимый лимит</div>
-                <div class='metric-value'>{threshold*100:.1f}%</div>
-            </div>""", unsafe_allow_html=True
+            f"""<div class='cl-metric'>
+                <div class='cl-metric-label'>Порог модели</div>
+                <div class='cl-metric-value' style='color:#334155;'>{threshold*100:.1f}%</div>
+            </div>""",
+            unsafe_allow_html=True,
         )
-    st.markdown("<br/>", unsafe_allow_html=True)
-    
-    tab1, tab2, tab3, tab4, tab5 = st.tabs([
-        " Главный дашборд",
-        " Инсайты и Факторы (SHAP)",
-        " Моделирование (What-If)",
-        " Исследования",
-        " О проекте",
-    ])
-    
-    with tab1:
 
-        explainer = CreditExplainer(trainer.model, X_train, feature_names)
-        shap_info = explainer.explain(X_user)
+    # risk bar — simple visual indicator
+    bar_pct = min(int(pred * 100), 100)
+    bar_color = "#16a34a" if bar_pct < 30 else "#d97706" if bar_pct < 70 else "#dc2626"
+    st.markdown(
+        f"""<div style="margin-top:4px;">
+            <div style="height:4px; background:#e2e8f0; border-radius:2px; overflow:hidden;">
+                <div style="width:{bar_pct}%; height:100%; background:{bar_color}; border-radius:2px; transition:width 0.3s;"></div>
+            </div>
+            <p class='cl-small' style='margin-top:4px;'>Интенсивность риска</p>
+        </div>""",
+        unsafe_allow_html=True,
+    )
 
-        st.markdown("###  Объяснение инференса")
-        st.write(generate_explanation(shap_info))
+    # -----------------------------------------------------------------------
+    # Interpretation + recommendations
+    # -----------------------------------------------------------------------
+    explainer = CreditExplainer(trainer.model, X_train, feature_names)
+    shap_info = explainer.explain(X_user)
 
-        brief = generate_human_brief(shap_info)
-        st.markdown("###  Краткое резюме")
-        st.markdown(
-            f"**Уровень риска:** {brief['risk_level'].capitalize()}  "+
-            f"| **Вероятность затруднений:** {brief['probability']*100:.1f}%"
-        )
-        st.markdown("**3 главные причины:**")
+    st.markdown("<div class='cl-section'>Обоснование решения</div>", unsafe_allow_html=True)
+    st.write(generate_explanation(shap_info))
+
+    brief = generate_human_brief(shap_info)
+    st.markdown(
+        f"<p class='cl-muted'>Уровень риска: <b>{brief['risk_level'].capitalize()}</b> &middot; "
+        f"Вероятность затруднений: <b>{brief['probability']*100:.1f}%</b></p>",
+        unsafe_allow_html=True,
+    )
+
+    if brief["reasons"]:
+        st.markdown("<p class='cl-muted'>Ключевые факторы:</p>", unsafe_allow_html=True)
         for reason in brief["reasons"]:
-            st.write(f"- {reason}")
+            st.write(f"– {reason}")
 
-        st.markdown("**Что можно сделать, чтобы снизить риск:**")
-        for tip in brief["tips"]:
-            st.write(f"- {tip}")
-
-        st.markdown("###  Персональные рекомендации")
-        auto_recs = generate_auto_recommendations(shap_info, amount, duration)
+    auto_recs = generate_auto_recommendations(shap_info, amount_rub, duration)
+    if auto_recs:
+        st.markdown("<div class='cl-section'>Рекомендации</div>", unsafe_allow_html=True)
         for rec in auto_recs:
-            st.markdown(f"<div class='info-panel'> {rec}</div>", unsafe_allow_html=True)
+            st.markdown(f"<div class='cl-rec'>{rec}</div>", unsafe_allow_html=True)
 
-        st.markdown("###  Сегментный профиль")
-        st.info("Анализ принадлежности к демографическим группам")
-        seg_risk = generate_segment_risk(age, job_rus)
-        st.markdown(f"**Группа:** {seg_risk['group']}")
-        st.markdown(f"**Возрастной фактор:** {seg_risk['age_risk']}")
-        st.markdown(f"**Профессиональный фактор:** {seg_risk['job_risk']}")
+    # -----------------------------------------------------------------------
+    # What-if (compact inline)
+    # -----------------------------------------------------------------------
+    st.markdown("<div class='cl-section'>What-if анализ</div>", unsafe_allow_html=True)
+    w1, w2 = st.columns(2)
+    with w1:
+        amount_whatif_rub = st.slider(
+            "Сумма кредита", 25000, 1000000, int(amount_rub), step=5000, key="whatif_amount"
+        )
+    with w2:
+        duration_whatif = st.slider(
+            "Срок кредита", 6, 72, int(duration), key="whatif_duration"
+        )
 
-        with st.expander("❓ Как интерпретировать эти данные?", expanded=False):
-            st.write(explain_waterfall_for_user())
-            st.markdown(
-                """
-                Что важно смотреть в первую очередь:
-                - Вероятность затруднений в процентах.
-                - 2-3 фактора, которые сильнее всего повышают риск.
-                - Можно ли снизить риск через what-if анализ (сумма и срок).
-                """
-            )
+    amount_whatif_dm = int(amount_whatif_rub / DM_TO_RUB)
+    row_whatif = build_input_df(
+        age=age,
+        amount=amount_whatif_dm,
+        duration=duration_whatif,
+        status=status_map[status_rus],
+        history=history_map[history_rus],
+        purpose=purpose_map[purpose_rus],
+        savings=savings_map[savings_rus],
+        employment_tenure=employment_tenure_map[tenure_rus],
+        installment_rate=installment_rate,
+        personal_status=personal_status_map[personal_status_rus],
+        guarantors=guarantors_map[guarantors_rus],
+        residence=residence,
+        property_type=property_map[property_rus],
+        other_installments=other_installments_map[other_installments_rus],
+        housing=housing_map[housing_rus],
+        existing_credits=existing_credits,
+        job=job_map[job_rus],
+        dependents=dependents,
+        phone=phone_map[phone_rus],
+        foreign=foreign_map[foreign_rus],
+    )
+    X_whatif = preprocessor.transform(row_whatif)
+    pred_whatif = float(trainer.predict_proba(X_whatif)[0])
+    delta = pred_whatif - pred
 
-    with tab2:
-        st.markdown("###  Влияние каждого фактора кредитного скоринга")
+    delta_color = "#16a34a" if delta < 0 else "#dc2626" if delta > 0 else "#64748b"
+    st.markdown(
+        f"<p>Новая вероятность дефолта: <b>{pred_whatif*100:.1f}%</b> "
+        f"<span style='color:{delta_color}; font-weight:600;'>({delta*100:+.1f} п.п.)</span></p>",
+        unsafe_allow_html=True,
+    )
+
+    # -----------------------------------------------------------------------
+    # SHAP factors (collapsible, for operators)
+    # -----------------------------------------------------------------------
+    with st.expander("Детальный разбор факторов", expanded=False):
         friendly_feature_names = [humanize_feature_name(name) for name in shap_info["feature_names"]]
         top_idx = np.argsort(np.abs(shap_info["shap_values"]))[-8:][::-1]
         factors_df = pd.DataFrame(
             {
                 "Фактор": [friendly_feature_names[i] for i in top_idx],
-                "Влияние": ["повышает риск" if shap_info["shap_values"][i] > 0 else "снижает риск" for i in top_idx],
+                "Влияние": [
+                    "повышает" if shap_info["shap_values"][i] > 0 else "снижает"
+                    for i in top_idx
+                ],
                 "Сила влияния": [float(abs(shap_info["shap_values"][i])) for i in top_idx],
             }
         )
-        st.dataframe(factors_df, width="stretch", hide_index=True)
+        # color-coding via column config
+        st.dataframe(
+            factors_df,
+            hide_index=True,
+            use_container_width=True,
+            column_config={
+                "Влияние": st.column_config.TextColumn(
+                    "Влияние",
+                    help="Направление влияния фактора на риск дефолта",
+                ),
+                "Сила влияния": st.column_config.NumberColumn(
+                    "Сила",
+                    format="%.4f",
+                    help="Абсолютное значение вклада фактора",
+                ),
+            },
+        )
 
-        # SHAP waterfall intentionally left in codebase for technical analysis,
-        # but hidden from the main UI to keep the product understandable for non-experts.
-        if st.session_state.get("show_technical_shap_plot", False):
+        if st.checkbox("Показать SHAP waterfall", value=False):
             fig = plt.figure(figsize=(9, 6))
             explainer.plot_waterfall(
                 shap_values=shap_info["shap_values"],
@@ -503,60 +465,26 @@ if st.session_state.show_results:
             st.pyplot(fig)
             plt.close(fig)
 
-    with tab3:
-        st.markdown("###  Регулировка параметров (What-if симуляция)")
-        st.caption("Подвигайте ползунки, чтобы увидеть изменение вероятности дефолта.")
-        amount_whatif = st.slider(
-            "Изменить сумму кредита", 500, 20000, int(amount), step=100, key="whatif_amount"
-        )
-        duration_whatif = st.slider(
-            "Изменить срок кредита", 6, 72, int(duration), key="whatif_duration"
-        )
+    # -----------------------------------------------------------------------
+    # Segment profile
+    # -----------------------------------------------------------------------
+    seg_risk = generate_segment_risk(age, job_rus)
+    st.markdown("<div class='cl-section'>Сегментный профиль</div>", unsafe_allow_html=True)
+    st.markdown(
+        f"<p class='cl-muted'>Группа: <b>{seg_risk['group']}</b> &middot; "
+        f"Возрастной фактор: {seg_risk['age_risk']} &middot; "
+        f"Профессиональный фактор: {seg_risk['job_risk']}</p>",
+        unsafe_allow_html=True,
+    )
 
-        row_whatif = build_input_df(
-            age=age,
-            amount=amount_whatif,
-            duration=duration_whatif,
-            status=status_map[status_rus],
-            history=history_map[history_rus],
-            purpose=purpose_map[purpose_rus],
-            savings=savings_map[savings_rus],
-            employment_tenure=employment_tenure_map[tenure_rus],
-            installment_rate=installment_rate,
-            personal_status=personal_status_map[personal_status_rus],
-            guarantors=guarantors_map[guarantors_rus],
-            residence=residence,
-            property_type=property_map[property_rus],
-            other_installments=other_installments_map[other_installments_rus],
-            housing=housing_map[housing_rus],
-            existing_credits=existing_credits,
-            job=job_map[job_rus],
-            dependents=dependents,
-            phone=phone_map[phone_rus],
-            foreign=foreign_map[foreign_rus],
-        )
-        X_whatif = preprocessor.transform(row_whatif)
-        pred_whatif = float(trainer.predict_proba(X_whatif)[0])
-
-        delta = pred_whatif - pred
-        st.write(
-            f"Новая вероятность трудностей с выплатами: **{pred_whatif*100:.1f}%** "
-            f"(изменение {delta*100:+.1f} п.п.)"
-        )
-
-    with tab4:
-        st.markdown("<div class='section-title'>Исследование гиперпараметров (Ablation Study)</div>", unsafe_allow_html=True)
-        st.markdown(
-            "Мы провели 5-fold Stratified Cross-Validation для сравнения конфигураций нейронной сети. "
-            "Цель — найти оптимальный баланс между сложностью модели и её обобщающей способностью."
-        )
-
+    # -----------------------------------------------------------------------
+    # Technical details (hidden by default)
+    # -----------------------------------------------------------------------
+    with st.expander("Техническая информация", expanded=False):
         ablation_path = Path(__file__).resolve().parent / "reports" / "ablation_summary.json"
         if ablation_path.exists():
             ablation_data = json.loads(ablation_path.read_text(encoding="utf-8"))
             experiments = ablation_data.get("experiments", {})
-
-            st.markdown("#### Сравнение конфигураций (mean ± std)")
             rows = []
             for name, res in experiments.items():
                 mean = res["mean"]
@@ -566,79 +494,23 @@ if st.session_state.show_results:
                     "ROC-AUC": f"{mean['roc_auc']:.4f} ± {std['roc_auc']:.4f}",
                     "PR-AUC": f"{mean['pr_auc']:.4f} ± {std['pr_auc']:.4f}",
                     "F1": f"{mean['f1']:.4f} ± {std['f1']:.4f}",
-                    "Precision": f"{mean['precision']:.4f} ± {std['precision']:.4f}",
-                    "Recall": f"{mean['recall']:.4f} ± {std['recall']:.4f}",
                 })
             st.dataframe(pd.DataFrame(rows), hide_index=True, use_container_width=True)
-
             best = ablation_data.get("best_config", "—")
             test_m = ablation_data.get("test_metrics", {})
-            st.success(f"🏆 Лучшая конфигурация по CV: **{best}** | ROC-AUC на тесте: **{test_m.get('roc_auc', 0):.4f}**")
-
-            ablation_plot = Path(__file__).resolve().parent / "data" / "plots" / "german" / "ablation" / "ablation_barplot.png"
-            if ablation_plot.exists():
-                st.image(str(ablation_plot), caption="Сравнение метрик по конфигурациям", use_column_width=True)
-        else:
-            st.info("Ablation Study ещё не проведён. Запустите `python src/hyperparam_study.py`.")
-
-        st.markdown("<div class='section-title'>Ключевые выводы</div>", unsafe_allow_html=True)
-        st.markdown(
-            """
-            - **High Dropout** (0.5/0.4/0.3) показал наилучший ROC-AUC и PR-AUC, подтвердив гипотезу о переобучении baseline.
-            - **Уменьшение архитектуры** (128→64→32) привело к снижению качества — модель недообучается.
-            - **Порог 0.7** сильно повышает Precision (~0.59), но режет Recall до ~0.41. Это консервативная политика.
-            - **CV Stacking Ensemble** с OOF-предсказаниями улучшил ROC-AUC с 0.787 до **0.817**.
-            """
-        )
-
-    with tab5:
-        st.markdown("<div class='section-title'>О проекте CreditLens</div>", unsafe_allow_html=True)
-        st.markdown(
-            """
-            **CreditLens** — курсовой проект по дисциплине «Нейронные сети и искусственный интеллект».
-            
-            #### Архитектура решения
-            ```
-            Данные → Предобработка → MLP (CreditNet) → SHAP → Текстовое объяснение
-                                    ↓
-                              Stacking Ensemble
-            ```
-            
-            #### Технологии
-            """
-        )
-        tech_cols = st.columns(5)
-        badges = [
-            ("PyTorch", "#ee4c2c", "Фреймворк DL"),
-            ("SHAP", "#2ecc71", "Интерпретация"),
-            ("scikit-learn", "#3498db", "ML модели"),
-            ("Streamlit", "#e74c3c", "Веб-UI"),
-            ("FastAPI", "#9b59b6", "REST API"),
-        ]
-        for col, (name, color, desc) in zip(tech_cols, badges):
-            col.markdown(
-                f"<div style='text-align:center; padding:12px; border-radius:12px; background:{color}15;'>"
-                f"<div style='font-weight:700; color:{color};'>{name}</div>"
-                f"<div style='font-size:0.8rem; opacity:0.7;'>{desc}</div></div>",
+            st.markdown(
+                f"<p class='cl-muted'>Лучшая конфигурация: <b>{best}</b> &middot; "
+                f"ROC-AUC на тесте: <b>{test_m.get('roc_auc', 0):.4f}</b></p>",
                 unsafe_allow_html=True,
             )
+        else:
+            st.write("Ablation study не проведен.")
 
-        st.markdown(
-            """
-            #### Особенности
-            - **Конфигурируемая нейросеть** с BatchNorm, Dropout и Early Stopping
-            - **5-fold CV** для оценки качества и генерации meta-признаков
-            - **SHAP-объяснения** с переводом в человекочитаемый текст
-            - **What-if анализ** для подбора параметров кредита
-            - **Автоматизированный пайплайн** через Makefile
-            """
-        )
-
-        report_path = Path(__file__).resolve().parent / ".." / "PROJECT_REPORT.md"
-        st.markdown(
-            "📄 Подробный академический отчёт доступен в файле `PROJECT_REPORT.md` в корне проекта."
-        )
-
+    # -----------------------------------------------------------------------
+    # Export
+    # -----------------------------------------------------------------------
+    report_client_input = row.to_dict(orient="records")[0]
+    report_client_input["Amount"] = amount_rub
     report = {
         "timestamp": datetime.now().isoformat(timespec="seconds"),
         "probability_default": round(pred, 6),
@@ -646,26 +518,20 @@ if st.session_state.show_results:
         "threshold": round(threshold, 6),
         "what_if_probability_default": round(pred_whatif, 6),
         "what_if_delta_pp": round(delta * 100, 3),
-        "client_input": row.to_dict(orient="records")[0],
+        "client_input": report_client_input,
     }
     st.download_button(
-        "Скачать отчет по оценке (JSON)",
+        "Скачать отчет (JSON)",
         data=json.dumps(report, ensure_ascii=False, indent=2),
         file_name="creditlens_report.json",
         mime="application/json",
-        width="stretch",
     )
 
-    st.markdown("<div class='section-title'>Дорожная карта</div>", unsafe_allow_html=True)
-    roadmap_df = pd.DataFrame(
-        [
-            {"Фича": "Ablation Study (исследование гиперпараметров)", "Польза": "Научно обоснованный выбор архитектуры", "Статус": "✅ Реализовано"},
-            {"Фича": "CV Stacking Ensemble", "Польза": "Повышение качества через OOF-метаобучение", "Статус": "✅ Реализовано"},
-            {"Фича": "Сегментный риск по профессиям/возрастам", "Польза": "Точнее политика одобрения", "Статус": "✅ Реализовано"},
-            {"Фича": "Авто-рекомендации клиенту", "Польза": "Показывает как повысить шанс одобрения", "Статус": "✅ Реализовано"},
-            {"Фича": "Мониторинг дрейфа качества", "Польза": "Контроль деградации модели в проде", "Статус": "📋 Backlog"},
-        ]
+    # tiny footer
+    st.markdown(
+        "<p class='cl-small' style='margin-top:32px; text-align:center;'>CreditLens — внутренний инструмент скоринга</p>",
+        unsafe_allow_html=True,
     )
-    st.dataframe(roadmap_df, hide_index=True, use_container_width=True)
+
 else:
-    st.info("Пожалуйста, заполните данные в меню слева и нажмите «Узнать результат» — мы проанализируем ваш профиль.", icon=None)
+    st.info("Заполните параметры в боковой панели и нажмите «Оценить», чтобы получить результат.")
